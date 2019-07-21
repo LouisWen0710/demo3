@@ -31,7 +31,7 @@
             android:text="QRCODE" />
 
         <Button
-            android:id="@+id/ground_level_button"
+            android:id="@+id/load_btn"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
@@ -53,7 +53,7 @@
         mapbox:layout_constraintTop_toTopOf="parent"
         mapbox:mapbox_cameraTargetLat="24.987419"
         mapbox:mapbox_cameraTargetLng="121.548190"
-        mapbox:mapbox_cameraZoom="16.5">
+        mapbox:mapbox_cameraZoom="20">
 
     </com.mapbox.mapboxsdk.maps.MapView>
 

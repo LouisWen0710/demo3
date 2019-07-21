@@ -7,6 +7,7 @@ import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.graphics.drawable.BitmapDrawable;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorManager;
@@ -35,8 +36,13 @@ import com.mapbox.api.directions.v5.models.DirectionsResponse;
 import com.mapbox.api.directions.v5.models.DirectionsRoute;
 import com.mapbox.api.matching.v5.MapboxMapMatching;
 import com.mapbox.api.matching.v5.models.MapMatchingResponse;
+import com.mapbox.core.utils.TextUtils;
 import com.mapbox.geojson.Point;
 import com.mapbox.mapboxsdk.Mapbox;
+import com.mapbox.mapboxsdk.annotations.Marker;
+import com.mapbox.mapboxsdk.annotations.MarkerOptions;
+import com.mapbox.mapboxsdk.annotations.Polyline;
+import com.mapbox.mapboxsdk.annotations.PolylineOptions;
 import com.mapbox.mapboxsdk.camera.CameraPosition;
 import com.mapbox.mapboxsdk.camera.CameraUpdate;
 import com.mapbox.mapboxsdk.camera.CameraUpdateFactory;
@@ -55,18 +61,29 @@ import com.mapbox.services.android.navigation.v5.navigation.MapboxNavigationOpti
 import com.mapbox.services.android.navigation.v5.navigation.NavigationRoute;
 
 
+import java.io.BufferedReader;
+import java.io.FileInputStream;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.nio.charset.Charset;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Vector;
 
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 import static android.Manifest.permission.ACCESS_FINE_LOCATION;
 import static android.Manifest.permission.BODY_SENSORS;
 import static android.Manifest.permission.CAMERA;
 
-public class MainActivity extends AppCompatActivity implements SensorEventListener{
+public class MainActivity extends AppCompatActivity implements SensorEventListener {
     private MapboxMap mapboxMap1;
     private MapView mapView;
     //sensor
@@ -81,6 +98,33 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private TextView scan_content;
     private TextView scan_format;
     private Button scan_btn;
+    private String scanContent = "";
+    private Marker point;
+    private Button load;
+    int count1 = 0, count2 = 0;
+    double distance2 = 0;
+    double LOWD2 = 100000;
+    LatLng PointArrayUP[];
+    Marker start;
+    LatLng StartP, EndP;
+    int latlngIndex = 0;
+    Polyline poly;
+    private LatLng[] routePP;
+    boolean route = true, ArrayC = false;
+    private static double[][] w1;
+    ArrayList<Integer> result = new ArrayList<>();
+    private double[][]dist;
+    String PATH;
+    private int[][]path;
+    private static final  double INF = Double.POSITIVE_INFINITY;
+    ArrayList<LatLng> Pts = new ArrayList<>();
+    int pathN=2;
+    int preKey,nowKey;
+    Vector<LatLng> v =new Vector<LatLng>();
+
+    HashMap<Integer, LatLng> map = new HashMap<Integer, LatLng>();
+    HashMap<String, Double> mapdistance = new HashMap<String, Double>();
+    private static final LatLng M618 = new LatLng(24.98737419595, 121.54822960462);
 
 
     //sensor
@@ -90,12 +134,15 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         super.onCreate(savedInstanceState);
         Mapbox.getInstance(this, "pk.eyJ1IjoiODI4MzYyMjUiLCJhIjoiY2p1ZmlyODZ4MGR6bDQzbHA2encxaXhydCJ9.NW6EQXxNywZ14Vr9D9VoHA");
         setContentView(R.layout.activity_main);
+        load=(Button)findViewById(R.id.load_btn);
         mapView = findViewById(R.id.mapView);
         mapView.onCreate(savedInstanceState);
         mapView.getMapAsync(new OnMapReadyCallback() {
             @Override
             public void onMapReady(@NonNull MapboxMap mapboxMap) {
-                mapboxMap.setStyle(new Style.Builder().fromUri("mapbox://styles/82836225/cjvw5bu3f0jzu1cpg82699h61"),
+                PATH="M6Path.geojson";
+                pathN=2;
+                mapboxMap.setStyle(new Style.Builder().fromUri("mapbox://styles/82836225/cjyaadi4u04b81ds8josl2vij"),
                         new Style.OnStyleLoaded() {
                             @Override
                             public void onStyleLoaded(@NonNull Style style) {
@@ -110,10 +157,63 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                         .zoom(20)//載入時的大小
                         .bearing(170)//將地圖呈現時的傾斜度設置為平行
                         .build();
-                mapboxMap.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition),1000);//必須到這把設定的值丟給animateCamera
+                loadPath();
+                mapboxMap.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition), 1000);//必須到這把設定的值丟給animateCamera
+                mapboxMap1.addOnMapClickListener(new MapboxMap.OnMapClickListener() {
+                    @Override
+                    public boolean onMapClick(@NonNull LatLng origin) {
+
+                        if (point == null) {
+                            point = mapboxMap1.addMarker(new MarkerOptions().position(origin));
+                        } else {
+                            mapboxMap1.removeMarker(point);
+                            point = null;
+                            point = mapboxMap1.addMarker(new MarkerOptions().position(origin));
+                        }
+                        return true;
+                    }
+                });
+                load.setOnClickListener(new View.OnClickListener() {
+                    @Override
+                    public void onClick(View v) {
+                        if (poly != null) {
+                            mapboxMap1.removePolyline(poly);
+                        }
+                        if (ArrayC) {
+                            result.clear();
+                        }
+                        //設定起點終點後並劃出最短路徑
+                        for (int i = 0; i < map.size(); i++) {
+                            if (map.get(i).equals(start.getPosition())) count1 = i;
+                        }
+                        Log.e("count1", String.valueOf(count1));
+                        for (int i = 0; i < map.size(); i++) {
+                            distance2 = point.getPosition().distanceTo(map.get(i));
+                            if (distance2 <= LOWD2) {
+                                count2 = i;
+                                LOWD2 = distance2;
+                            }
+                        }
+                        Log.e("count2:", String.valueOf(count2));
+                        LOWD2 = 10000;
+                  //      destination = mapboxMap1.addMarker(new MarkerOptions().position((map.get(count2))).title("終點"));
+                        StartP = new LatLng(start.getPosition().getLatitude(), start.getPosition().getLongitude());
+
+                        findCheapestPath(count1, count2, w1);
+
+                        routePP = new LatLng[result.size()];
+                        for (int i = 0; i < result.size(); i++) {
+                            routePP[i] = map.get(result.get(i));
+                        }
+                        poly = mapboxMap1.addPolyline(new PolylineOptions()
+                                .add(routePP)
+                                .color(Color.RED)
+                                .width(5));
+                      //  setTimerTask();
+                    }
+                });
             }
         });
-
         init_view();
         scan_btn.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -122,31 +222,202 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 scanIntegrator.initiateScan();
             }
         });
-
-
-        sensorManager = (SensorManager)getSystemService(Context.SENSOR_SERVICE);
+        sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
 //請求權限～
         int permission = ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION);
-        if(permission != PackageManager.PERMISSION_GRANTED){
+        if (permission != PackageManager.PERMISSION_GRANTED) {
             //未取得權限，這邊要取得。
             //以下動作是向使用者取得權限。
-            ActivityCompat.requestPermissions(this,new String[] {ACCESS_FINE_LOCATION, CAMERA, BODY_SENSORS}, Requestcode);
-        }else{
+            ActivityCompat.requestPermissions(this, new String[]{ACCESS_FINE_LOCATION, CAMERA, BODY_SENSORS}, Requestcode);
+        } else {
             //取得完畢，進行下一步動作。
         }
     }
 
-    public void onActivityResult(int requestCode, int resultCode, Intent intent){
+    //QRCODE
+    public void onActivityResult(int requestCode, int resultCode, Intent intent) {
         IntentResult scanningResult = IntentIntegrator.parseActivityResult(requestCode, resultCode, intent);
-        if(scanningResult!=null){
-            String scanContent=scanningResult.getContents();
-            String scanFormat=scanningResult.getFormatName();
+        if (scanningResult != null) {
+            scanContent = scanningResult.getContents();
+            String scanFormat = scanningResult.getFormatName();
             scan_content.setText(scanContent);
             scan_format.setText(scanFormat);
-        }else{
-            Toast.makeText(getApplicationContext(),"nothing",Toast.LENGTH_SHORT).show();
+        } else {
+            Toast.makeText(getApplicationContext(), "nothing", Toast.LENGTH_SHORT).show();
+            super.onActivityResult(requestCode, resultCode, intent);
+        }
+        switch (scanContent) {
+            case "M618":
+                start = mapboxMap1.addMarker(new MarkerOptions().position(M618));
+                break;
+        }
+       //  setTimerTask();
+
+}
+
+   private void loadPath() {
+        try {
+            Log.e("陣列:", "進");
+            // Load GeoJSON file
+            InputStream inputStream = getAssets().open(PATH);
+            BufferedReader rd = new BufferedReader(new InputStreamReader(inputStream, Charset.forName("UTF-8")));
+            StringBuilder sb = new StringBuilder();
+            int cp ;
+            while ((cp = rd.read()) != -1) {
+                sb.append((char)cp);
+      //          Log.e("json:", sb.toString());
+            }
+            inputStream.close();
+            Log.e("json:", "3");
+            // Parse JSON
+            JSONObject json = new JSONObject(sb.toString());
+
+            JSONArray features = json.getJSONArray("features");
+            Log.e("json5:", "5");
+            for (int i = 0; i < pathN; i++) {
+                Log.e("json2:", "3");
+                JSONObject feature = features.getJSONObject(i);
+
+                JSONObject geometry = feature.getJSONObject("geometry");
+                if (geometry != null) {
+                    Log.e("geometry", "3");
+                    String type = geometry.getString("type");
+
+                    // Our GeoJSON only has one feature: a line string
+                    if (!TextUtils.isEmpty(type) && type.equalsIgnoreCase("LineString")) {
+
+                        // Get the Coordinates
+                        JSONArray coords = geometry.getJSONArray("coordinates");
+
+                        for (int lc = 0; lc < coords.length(); lc++) {
+                            JSONArray coord = coords.getJSONArray(lc);
+                            LatLng latLng = new LatLng(coord.getDouble(1), coord.getDouble(0));
+                            Pts.add(latLng);
+                            Log.e("所有陣列:", latLng.toString());
+                            int checkpoint = 0; //判定每個點是否存在
+                            for (int z = 0; z < latlngIndex; z++) //判斷經緯度在HASHMAP裡是否出現過如果有checkpoint++
+                            {
+                                LatLng tmp = map.get(z);
+                                if (tmp.getLatitude() == latLng.getLatitude()) {
+                                    if (tmp.getLongitude() == latLng.getLongitude()) {
+                                        checkpoint++;
+                                    }
+                                }
+                            }
+                            if (checkpoint == 0)//如果不存在創建一個新的KEY放進map
+                            {
+                                map.put(latlngIndex, latLng);
+                                latlngIndex++;
+                            }
+                            if (lc != 0) {
+                                JSONArray precoord = coords.getJSONArray(lc - 1);
+                                LatLng preLatLng = new LatLng(precoord.getDouble(1), precoord.getDouble(0));
+                                //float[] results = new float[1];
+                                //Location.distanceBetween(preLatLng.getLatitude(), preLatLng.getLongitude(), latLng.getLatitude(), latLng.getLongitude(),results);
+                                double ddd = preLatLng.distanceTo(latLng);///
+
+                                for (int s : map.keySet()) {
+                                    if (map.get(s).equals(preLatLng)) {
+                                        preKey = s;
+                                    } else if (map.get(s).equals(latLng)) {
+                                        nowKey = s;
+                                    }
+                                }
+                                String keyString = preKey + "," + nowKey;
+                            //    Log.e("距離3:",results.toString());
+                               mapdistance.put(keyString, ddd);
+                            }
+                            Pts.add(latLng);
+                            Log.e("陣列:", Pts.toString());
+                            //  Log.e("前點:",String.valueOf( mapdistance.get(preLatLng)));
+                            Log.e("當點:", String.valueOf(map));
+                        }
+
+                    }
+                }
+            }
+            StringBuilder a = new StringBuilder();
+            w1 = new double[map.size()][map.size()];
+            for (int m = 0; m < map.size(); m++) {
+                for (int n = 0; n < map.size(); n++) {
+                    w1[m][n] = Double.POSITIVE_INFINITY;
+                }
+            }
+            String[] key;
+            for (String s : mapdistance.keySet()) {
+                key = s.split(",");
+                w1[Integer.parseInt(key[0])][Integer.parseInt(key[1])] = mapdistance.get(s);
+                w1[Integer.parseInt(key[1])][Integer.parseInt(key[0])] = mapdistance.get(s);
+                Log.e("各個點:", String.valueOf(w1) );
+            }
+            for (int p = 0; p < map.size(); p++) {
+                for (int l = 0; l < map.size(); l++) {
+                    a.append(w1[p][l]).append(",");
+                }
+            }
+            LatLng PointArray[] = new LatLng[Pts.size()];
+            for (int c = 0; c < Pts.size(); c++) {
+                PointArray[c] = Pts.get(c);
+            }
+            for (LatLng ele : PointArray) {
+                if (!v.contains(ele)) {
+                    v.add(ele);
+                }
+            }
+            PointArrayUP = new LatLng[v.size()];
+            for (int i = 0; i < v.size(); i++) {
+                PointArrayUP[i] = v.get(i);
+                Log.e("個點陣列:", PointArrayUP[i].toString());
+            }
+            dist = new double[w1.length][w1.length];
+            path = new int[w1.length][w1.length];
+        } catch (Exception exception) {
+          //  Log.e(TAG, "Exception Loading GeoJSON: " + exception.toString());
         }
     }
+    public void findCheapestPath(int begin, int end, double[][] matrix) {
+        floyd(matrix);
+        result.add(begin);
+        findPath(begin, end);
+        result.add(end);
+        ArrayC = true;
+    }
+
+    //最短路徑規劃找出所有點
+    public void findPath(int i, int j) {
+        int k = path[i][j];
+        if (k == -1) return;
+        findPath(i, k);   //遞歸
+        result.add(k);
+        findPath(k, j);
+    }
+    //佛洛伊德演算法(求兩點最短路徑)
+    public void floyd(double[][] matrix) {
+
+        int size = matrix.length;
+        //initialize dist and path
+        for (int i = 0; i < size; i++) {
+            for (int j = 0; j < size; j++) {
+                path[i][j] = -1;
+                dist[i][j] = matrix[i][j];
+            }
+        }
+        for (int k = 0; k < size; k++) {
+            for (int i = 0; i < size; i++) {
+                for (int j = 0; j < size; j++) {
+                    if (dist[i][k] != INF &&
+                            dist[k][j] != INF &&
+                            dist[i][k] + dist[k][j] < dist[i][j]) {
+                        dist[i][j] = dist[i][k] + dist[k][j];
+                        path[i][j] = k;
+                    }
+                }
+            }
+        }
+
+    }
+
+    //QRCODE宣告
     private void init_view(){
         this.scan_content=(TextView)findViewById(R.id.textView);
         this.scan_format=(TextView)findViewById(R.id.textView2);
@@ -193,7 +464,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     protected void onDestroy() {
         super.onDestroy();
         mapView.onDestroy();
-        //  navigation.onDestroy();
     }
 
     @Override
@@ -203,6 +473,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     }
 
     @Override
+    //傳感器-------地圖旋轉
     public void onSensorChanged(SensorEvent event) {
         final float alpha = 0.97f; //alpha值是用來過濾一些雜訊，降低誤差值。
         synchronized (this) {
@@ -231,17 +502,19 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             }
         }
     }
+    //方位旋轉
     private void updateCameraBearing(MapboxMap mMap, float bearing){
         mapboxMap1 = mMap;
         CameraPosition currentPlace = new CameraPosition.Builder()
-                 .target(new LatLng(24.987366, 121.548014))//管院
+                // .target(new LatLng(24.987366, 121.548034))//管院
                // .target(new LatLng(24.987419, 121.548190))//舍我
-                .bearing(bearing).zoom(17.5f).build();
-        mapboxMap1.moveCamera(CameraUpdateFactory.newCameraPosition(currentPlace));
+                .bearing(bearing).zoom(18.6f).tilt(40).build();
+        mapboxMap1.animateCamera(CameraUpdateFactory.newCameraPosition(currentPlace),2000);
     }
     @Override
     public void onAccuracyChanged(Sensor sensor, int accuracy) {
         //do nothing
     }
+
 }
 
