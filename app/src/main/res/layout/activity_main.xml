@@ -11,8 +11,8 @@
 
     <RadioGroup
         android:id="@+id/floor_level_buttons"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+        android:layout_width="165dp"
+        android:layout_height="191dp"
         android:layout_marginTop="8dp"
         android:layout_marginBottom="8dp"
         mapbox:layout_constraintBottom_toBottomOf="parent"
@@ -24,20 +24,32 @@
 
         <Button
             android:id="@+id/QR"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginLeft="5dp"
             android:layout_marginTop="8dp"
+            android:layout_marginRight="5dp"
             android:layout_marginBottom="8dp"
             android:text="QRCODE" />
 
         <Button
             android:id="@+id/load_btn"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginStart="8dp"
-            android:layout_marginEnd="8dp"
-            android:layout_marginBottom="16dp"
-            android:text="G" />
+            android:layout_marginLeft="5dp"
+            android:layout_marginRight="5dp"
+            android:layout_marginBottom="8dp"
+            android:text="路徑規劃" />
+
+        <Button
+            android:id="@+id/btn_start"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="5dp"
+            android:layout_marginRight="5dp"
+            android:layout_marginBottom="8dp"
+            android:text="開始導航" />
+
     </RadioGroup>
 
     <com.mapbox.mapboxsdk.maps.MapView
@@ -83,8 +95,25 @@
         android:text="TextView"
         mapbox:layout_constraintBottom_toBottomOf="parent"
         mapbox:layout_constraintEnd_toStartOf="@+id/floor_level_buttons"
+        mapbox:layout_constraintHorizontal_bias="0.478"
+        mapbox:layout_constraintStart_toStartOf="parent"
+        mapbox:layout_constraintTop_toBottomOf="@+id/textView"
+        mapbox:layout_constraintVertical_bias="0.582" />
+
+    <TextView
+        android:id="@+id/txt_distace"
+        android:layout_width="89dp"
+        android:layout_height="50dp"
+        android:layout_marginStart="8dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginEnd="8dp"
+        android:layout_marginBottom="44dp"
+        android:text="TextView"
+        mapbox:layout_constraintBottom_toBottomOf="parent"
+        mapbox:layout_constraintEnd_toStartOf="@+id/floor_level_buttons"
         mapbox:layout_constraintHorizontal_bias="0.49"
         mapbox:layout_constraintStart_toStartOf="parent"
-        mapbox:layout_constraintTop_toBottomOf="@+id/textView" />
+        mapbox:layout_constraintTop_toBottomOf="@+id/textView"
+        mapbox:layout_constraintVertical_bias="0.109" />
 
 </android.support.constraint.ConstraintLayout>

@@ -15,6 +15,7 @@ import android.location.Location;
 import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
+import android.support.v4.graphics.drawable.IconCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
 import android.view.OrientationEventListener;
@@ -39,6 +40,8 @@ import com.mapbox.api.matching.v5.models.MapMatchingResponse;
 import com.mapbox.core.utils.TextUtils;
 import com.mapbox.geojson.Point;
 import com.mapbox.mapboxsdk.Mapbox;
+import com.mapbox.mapboxsdk.annotations.Icon;
+import com.mapbox.mapboxsdk.annotations.IconFactory;
 import com.mapbox.mapboxsdk.annotations.Marker;
 import com.mapbox.mapboxsdk.annotations.MarkerOptions;
 import com.mapbox.mapboxsdk.annotations.Polyline;
@@ -97,13 +100,16 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private Activity mainactivity;
     private TextView scan_content;
     private TextView scan_format;
+    private  TextView txt_dis;
     private Button scan_btn;
     private String scanContent = "";
     private Marker point;
     private Button load;
+    private Button btn_start;
     int count1 = 0, count2 = 0;
     double distance2 = 0;
     double LOWD2 = 100000;
+    double Actualdistance ;
     LatLng PointArrayUP[];
     Marker start;
     LatLng StartP, EndP;
@@ -118,13 +124,14 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private int[][]path;
     private static final  double INF = Double.POSITIVE_INFINITY;
     ArrayList<LatLng> Pts = new ArrayList<>();
-    int pathN=2;
+    int pathN;
     int preKey,nowKey;
     Vector<LatLng> v =new Vector<LatLng>();
 
     HashMap<Integer, LatLng> map = new HashMap<Integer, LatLng>();
     HashMap<String, Double> mapdistance = new HashMap<String, Double>();
-    private static final LatLng M618 = new LatLng(24.98737419595, 121.54822960462);
+    private static final LatLng M618 = new LatLng(24.98738088163, 121.54823161628);
+    private static final LatLng M615 = new LatLng(24.98730118264, 121.5481621635);
 
 
     //sensor
@@ -134,14 +141,15 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         super.onCreate(savedInstanceState);
         Mapbox.getInstance(this, "pk.eyJ1IjoiODI4MzYyMjUiLCJhIjoiY2p1ZmlyODZ4MGR6bDQzbHA2encxaXhydCJ9.NW6EQXxNywZ14Vr9D9VoHA");
         setContentView(R.layout.activity_main);
+        txt_dis = (TextView)findViewById(R.id.txt_distace);
         load=(Button)findViewById(R.id.load_btn);
         mapView = findViewById(R.id.mapView);
         mapView.onCreate(savedInstanceState);
         mapView.getMapAsync(new OnMapReadyCallback() {
             @Override
             public void onMapReady(@NonNull MapboxMap mapboxMap) {
-                PATH="M6Path.geojson";
-                pathN=2;
+                PATH="map1.geojson";
+                pathN=3;
                 mapboxMap.setStyle(new Style.Builder().fromUri("mapbox://styles/82836225/cjyaadi4u04b81ds8josl2vij"),
                         new Style.OnStyleLoaded() {
                             @Override
@@ -170,6 +178,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                             point = null;
                             point = mapboxMap1.addMarker(new MarkerOptions().position(origin));
                         }
+                        EndP = new LatLng(origin);
                         return true;
                     }
                 });
@@ -196,7 +205,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                         }
                         Log.e("count2:", String.valueOf(count2));
                         LOWD2 = 10000;
-                  //      destination = mapboxMap1.addMarker(new MarkerOptions().position((map.get(count2))).title("終點"));
+                        //      destination = mapboxMap1.addMarker(new MarkerOptions().position((map.get(count2))).title("終點"));
                         StartP = new LatLng(start.getPosition().getLatitude(), start.getPosition().getLongitude());
 
                         findCheapestPath(count1, count2, w1);
@@ -209,7 +218,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                                 .add(routePP)
                                 .color(Color.RED)
                                 .width(5));
-                      //  setTimerTask();
+                        //  setTimerTask();
+                        Actualdistance = GetDistance(StartP.getLatitude(), StartP.getLongitude(), EndP.getLatitude(), EndP.getLongitude());
+                        txt_dis.setText(String.valueOf(Actualdistance));
                     }
                 });
             }
@@ -237,6 +248,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     //QRCODE
     public void onActivityResult(int requestCode, int resultCode, Intent intent) {
         IntentResult scanningResult = IntentIntegrator.parseActivityResult(requestCode, resultCode, intent);
+  //      IconFactory iconFactory = IconFactory.getInstance(MainActivity.this);
+  //     Icon icon = iconFactory.fromResource(R.drawable.mapbox_compass_icon);
         if (scanningResult != null) {
             scanContent = scanningResult.getContents();
             String scanFormat = scanningResult.getFormatName();
@@ -248,7 +261,10 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         }
         switch (scanContent) {
             case "M618":
-                start = mapboxMap1.addMarker(new MarkerOptions().position(M618));
+                start = mapboxMap1.addMarker(new MarkerOptions().position(M618).title("起點"));
+                break;
+            case "M617":
+                start = mapboxMap1.addMarker(new MarkerOptions().position(M615).title("起點"));
                 break;
         }
        //  setTimerTask();
@@ -515,6 +531,23 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     public void onAccuracyChanged(Sensor sensor, int accuracy) {
         //do nothing
     }
+    //計算該緯度上的精度長度
+    private static double rad(double d) {
+        return d * Math.PI / 180.0;
+    }
 
+    //計算經緯度實際距離
+    public static double GetDistance(double lat1, double lng1, double lat2, double lng2) {
+        double EARTH_RADIUS = 6378137;
+        double radLat1 = rad(lat1);
+        double radLat2 = rad(lat2);
+        double a = radLat1 - radLat2;
+        double b = rad(lng1) - rad(lng2);
+        double s = 2 * Math.asin(Math.sqrt(Math.pow(Math.sin(a / 2), 2)
+                + Math.cos(radLat1) * Math.cos(radLat2) * Math.pow(Math.sin(b / 2), 2)));
+        s = s * EARTH_RADIUS;
+        s = Math.round(s * 10000) / 10000;
+        return s;
+    }
 }
 

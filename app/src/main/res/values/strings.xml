@@ -1,3 +1,8 @@
 <resources>
     <string name="app_name">demo3</string>
+    <string-array name="map">
+        <item>請選擇地圖....</item>
+        <item>世新管理學院6F</item>
+        <item>世新管理學院3F</item>
+    </string-array>
 </resources>
