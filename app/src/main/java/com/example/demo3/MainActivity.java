@@ -2,7 +2,10 @@ package com.example.demo3;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.app.ProgressDialog;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
@@ -22,7 +25,10 @@ import android.view.OrientationEventListener;
 import android.view.View;
 import android.view.animation.Animation;
 import android.view.animation.RotateAnimation;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -121,6 +127,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     ArrayList<Integer> result = new ArrayList<>();
     private double[][]dist;
     String PATH;
+    String style="mapbox://styles/82836225/cjyaadi4u04b81ds8josl2vi";
     private int[][]path;
     private static final  double INF = Double.POSITIVE_INFINITY;
     ArrayList<LatLng> Pts = new ArrayList<>();
@@ -145,86 +152,130 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         load=(Button)findViewById(R.id.load_btn);
         mapView = findViewById(R.id.mapView);
         mapView.onCreate(savedInstanceState);
-        mapView.getMapAsync(new OnMapReadyCallback() {
+      //  ProgressDialog progressDialog = ProgressDialog.show(MainActivity.this, "", "地圖載入中...", true); //dialog show
+      //  AlertDialog.Builder mBuilder = new AlertDialog.Builder(MainActivity.this); //build dialog
+      //  View mView = MainActivity.this.getLayoutInflater().inflate(R.layout.dialog_spinner, null); // dialog 中 show spinner
+        final Spinner mSpinner = (Spinner)findViewById(R.id.spinner); // 宣告 spinner
+        //下面是 spinner 去接  spinner 內容的方法
+        ArrayAdapter<String> adapter = new ArrayAdapter<String>(MainActivity.this, android.R.layout.simple_spinner_item, getResources().getStringArray(R.array.map));
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        // spinner 接 adapter 資料
+        mSpinner.setAdapter(adapter);
+        //spinner選擇，不能關閉這個對話匡，顯示，並讀選被選擇的position
+        // 讀取被選擇的順序
+        // 從[0]開始
+        mSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
-            public void onMapReady(@NonNull MapboxMap mapboxMap) {
-                PATH="map1.geojson";
-                pathN=3;
-                mapboxMap.setStyle(new Style.Builder().fromUri("mapbox://styles/82836225/cjyaadi4u04b81ds8josl2vij"),
-                        new Style.OnStyleLoaded() {
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                switch (position) {
+                    case 0:
+                        break;
+                    case 1:
+                        style = "mapbox://styles/82836225/cjyaadi4u04b81ds8josl2vij";//mapbox style網址
+                        PATH = "map1.geojson";//路徑檔案
+                        pathN = 3;
+                        clear();
+                        loadPath();
+                        break;
+                    case 2:
+                        style = "mapbox://styles/82836225/cjvw5bu3f0jzu1cpg82699h61";
+                        PATH = "M7Path.geojson";
+                        pathN = 2;
+                        clear();
+                        loadPath();
+                        break;
+                }
+                mapView.getMapAsync(new OnMapReadyCallback() {
+                    @Override
+                    public void onMapReady(@NonNull MapboxMap mapboxMap) {
+                     //   PATH = "map1.geojson";
+                     //   pathN = 3;
+                        mapboxMap.setStyle(new Style.Builder().fromUri(style),
+                                new Style.OnStyleLoaded() {
+                                    @Override
+                                    public void onStyleLoaded(@NonNull Style style) {
+                                        //do nothing
+
+                                    }
+                                });
+                        mapboxMap1 = mapboxMap; //在MapView上做一個Mapbox物件
+                        mapboxMap.setMinZoomPreference(10.5);
+                        mapboxMap.setMaxZoomPreference(23);
+                        CameraPosition cameraPosition = new CameraPosition.Builder()
+                                .target(new LatLng(24.987419, 121.548190))//世新大學舍我樓院經緯度
+                                .zoom(19)//載入時的大小
+                                .bearing(170)//將地圖呈現時的傾斜度設置為平行
+                                .build();
+                      //  loadPath();
+                        mapboxMap.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition), 1000);//必須到這把設定的值丟給animateCamera
+                        mapboxMap.setMinZoomPreference(18);
+                        mapboxMap.setMaxZoomPreference(20);
+                        mapboxMap1.addOnMapClickListener(new MapboxMap.OnMapClickListener() {
                             @Override
-                            public void onStyleLoaded(@NonNull Style style) {
-                                //do nothing
+                            public boolean onMapClick(@NonNull LatLng origin) {
+
+                                if (point == null) {
+                                    point = mapboxMap1.addMarker(new MarkerOptions().position(origin));
+                                } else {
+                                    mapboxMap1.removeMarker(point);
+                                    point = null;
+                                    point = mapboxMap1.addMarker(new MarkerOptions().position(origin));
+                                }
+                                EndP = new LatLng(origin);
+                                return true;
                             }
                         });
-                mapboxMap1 = mapboxMap; //在MapView上做一個Mapbox物件
-                mapboxMap.setMinZoomPreference(10.5);
-                mapboxMap.setMaxZoomPreference(23);
-                CameraPosition cameraPosition = new CameraPosition.Builder()
-                        .target(new LatLng(24.987419, 121.548190))//世新大學舍我樓院經緯度
-                        .zoom(20)//載入時的大小
-                        .bearing(170)//將地圖呈現時的傾斜度設置為平行
-                        .build();
-                loadPath();
-                mapboxMap.animateCamera(CameraUpdateFactory.newCameraPosition(cameraPosition), 1000);//必須到這把設定的值丟給animateCamera
-                mapboxMap1.addOnMapClickListener(new MapboxMap.OnMapClickListener() {
-                    @Override
-                    public boolean onMapClick(@NonNull LatLng origin) {
+                        load.setOnClickListener(new View.OnClickListener() {
+                            @Override
+                            public void onClick(View v) {
+                                if (poly != null) {
+                                    mapboxMap1.removePolyline(poly);
+                                }
+                                if (ArrayC) {
+                                    result.clear();
+                                }
+                                //設定起點終點後並劃出最短路徑
+                                for (int i = 0; i < map.size(); i++) {
+                                    if (map.get(i).equals(start.getPosition())) count1 = i;
+                                }
+                                Log.e("count1", String.valueOf(count1));
+                                for (int i = 0; i < map.size(); i++) {
+                                    distance2 = point.getPosition().distanceTo(map.get(i));
+                                    if (distance2 <= LOWD2) {
+                                        count2 = i;
+                                        LOWD2 = distance2;
+                                    }
+                                }
+                                Log.e("count2:", String.valueOf(count2));
+                                LOWD2 = 10000;
+                                //      destination = mapboxMap1.addMarker(new MarkerOptions().position((map.get(count2))).title("終點"));
+                                StartP = new LatLng(start.getPosition().getLatitude(), start.getPosition().getLongitude());
 
-                        if (point == null) {
-                            point = mapboxMap1.addMarker(new MarkerOptions().position(origin));
-                        } else {
-                            mapboxMap1.removeMarker(point);
-                            point = null;
-                            point = mapboxMap1.addMarker(new MarkerOptions().position(origin));
-                        }
-                        EndP = new LatLng(origin);
-                        return true;
-                    }
-                });
-                load.setOnClickListener(new View.OnClickListener() {
-                    @Override
-                    public void onClick(View v) {
-                        if (poly != null) {
-                            mapboxMap1.removePolyline(poly);
-                        }
-                        if (ArrayC) {
-                            result.clear();
-                        }
-                        //設定起點終點後並劃出最短路徑
-                        for (int i = 0; i < map.size(); i++) {
-                            if (map.get(i).equals(start.getPosition())) count1 = i;
-                        }
-                        Log.e("count1", String.valueOf(count1));
-                        for (int i = 0; i < map.size(); i++) {
-                            distance2 = point.getPosition().distanceTo(map.get(i));
-                            if (distance2 <= LOWD2) {
-                                count2 = i;
-                                LOWD2 = distance2;
+                                findCheapestPath(count1, count2, w1);
+
+                                routePP = new LatLng[result.size()];
+                                for (int i = 0; i < result.size(); i++) {
+                                    routePP[i] = map.get(result.get(i));
+                                }
+                                poly = mapboxMap1.addPolyline(new PolylineOptions()
+                                        .add(routePP)
+                                        .color(Color.RED)
+                                        .width(5));
+                                //  setTimerTask();
+                                Actualdistance = GetDistance(StartP.getLatitude(), StartP.getLongitude(), EndP.getLatitude(), EndP.getLongitude());
+                                txt_dis.setText(String.valueOf(Actualdistance));
                             }
-                        }
-                        Log.e("count2:", String.valueOf(count2));
-                        LOWD2 = 10000;
-                        //      destination = mapboxMap1.addMarker(new MarkerOptions().position((map.get(count2))).title("終點"));
-                        StartP = new LatLng(start.getPosition().getLatitude(), start.getPosition().getLongitude());
-
-                        findCheapestPath(count1, count2, w1);
-
-                        routePP = new LatLng[result.size()];
-                        for (int i = 0; i < result.size(); i++) {
-                            routePP[i] = map.get(result.get(i));
-                        }
-                        poly = mapboxMap1.addPolyline(new PolylineOptions()
-                                .add(routePP)
-                                .color(Color.RED)
-                                .width(5));
-                        //  setTimerTask();
-                        Actualdistance = GetDistance(StartP.getLatitude(), StartP.getLongitude(), EndP.getLatitude(), EndP.getLongitude());
-                        txt_dis.setText(String.valueOf(Actualdistance));
+                        });
                     }
                 });
             }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+
+            }
         });
+
         init_view();
         scan_btn.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -522,7 +573,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private void updateCameraBearing(MapboxMap mMap, float bearing){
         mapboxMap1 = mMap;
         CameraPosition currentPlace = new CameraPosition.Builder()
-                // .target(new LatLng(24.987366, 121.548034))//管院
+                 .target(new LatLng(24.987366, 121.548034))//管院
                // .target(new LatLng(24.987419, 121.548190))//舍我
                 .bearing(bearing).zoom(18.6f).tilt(40).build();
         mapboxMap1.animateCamera(CameraUpdateFactory.newCameraPosition(currentPlace),2000);
@@ -548,6 +599,22 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         s = s * EARTH_RADIUS;
         s = Math.round(s * 10000) / 10000;
         return s;
+    }
+    public  void clear() {
+        if (poly != null) {
+            mapboxMap1.removePolyline(poly);
+        }
+        if (ArrayC) {
+            result.clear();
+        }
+        if (point != null) {
+            mapboxMap1.removeMarker(point);
+            point = null;
+        }
+        if (start != null) {
+            mapboxMap1.removeMarker(start);
+            start = null;
+        }
     }
 }
 
