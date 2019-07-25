@@ -4,23 +4,42 @@
     xmlns:mapbox="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
+    android:id="@+id/constraint"
     android:layout_height="match_parent"
     android:configChanges="orientation|screenSize"
     >
 
+    <com.mapbox.mapboxsdk.maps.MapView
+        android:id="@+id/mapView"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:layout_marginLeft="2dp"
+        android:layout_marginRight="2dp"
+        mapbox:layout_constraintBottom_toBottomOf="parent"
+        mapbox:layout_constraintEnd_toEndOf="parent"
+        mapbox:layout_constraintHorizontal_bias="0.333"
+        mapbox:layout_constraintStart_toStartOf="parent"
+        mapbox:layout_constraintTop_toTopOf="parent"
+        mapbox:layout_constraintVertical_bias="0.0"
+        mapbox:mapbox_cameraTargetLat="24.987419"
+        mapbox:mapbox_cameraTargetLng="121.548190"
+        mapbox:mapbox_cameraZoom="20">
+
+    </com.mapbox.mapboxsdk.maps.MapView>
 
     <RadioGroup
         android:id="@+id/floor_level_buttons"
-        android:layout_width="165dp"
-        android:layout_height="191dp"
-        android:layout_marginTop="8dp"
+        android:layout_width="105dp"
+        android:layout_height="175dp"
+        android:layout_marginStart="8dp"
+        android:layout_marginEnd="8dp"
         android:layout_marginBottom="8dp"
-        mapbox:layout_constraintBottom_toBottomOf="parent"
-        mapbox:layout_constraintEnd_toEndOf="@+id/mapView"
-        mapbox:layout_constraintHorizontal_bias="0.498"
-        mapbox:layout_constraintStart_toStartOf="@+id/mapView"
-        mapbox:layout_constraintTop_toBottomOf="@+id/mapView"
-        mapbox:layout_constraintVertical_bias="0.551">
+        mapbox:layout_constraintBottom_toBottomOf="@+id/mapView"
+        mapbox:layout_constraintEnd_toEndOf="parent"
+        mapbox:layout_constraintHorizontal_bias="0.972"
+        mapbox:layout_constraintStart_toStartOf="parent"
+        mapbox:layout_constraintTop_toTopOf="@+id/mapView"
+        mapbox:layout_constraintVertical_bias="0.799">
 
         <Button
             android:id="@+id/QR"
@@ -52,22 +71,6 @@
 
     </RadioGroup>
 
-    <com.mapbox.mapboxsdk.maps.MapView
-        android:id="@+id/mapView"
-        android:layout_width="0dp"
-        android:layout_height="394dp"
-        android:layout_marginLeft="2dp"
-        android:layout_marginRight="2dp"
-        mapbox:layout_constraintEnd_toEndOf="parent"
-        mapbox:layout_constraintHorizontal_bias="0.0"
-        mapbox:layout_constraintStart_toStartOf="parent"
-        mapbox:layout_constraintTop_toTopOf="parent"
-        mapbox:mapbox_cameraTargetLat="24.987419"
-        mapbox:mapbox_cameraTargetLng="121.548190"
-        mapbox:mapbox_cameraZoom="20">
-
-    </com.mapbox.mapboxsdk.maps.MapView>
-
     <TextView
         android:id="@+id/textView"
         android:layout_width="89dp"
@@ -79,26 +82,10 @@
         android:text="TextView"
         mapbox:layout_constraintBottom_toBottomOf="parent"
         mapbox:layout_constraintEnd_toEndOf="parent"
-        mapbox:layout_constraintHorizontal_bias="0.026"
+        mapbox:layout_constraintHorizontal_bias="0.0"
         mapbox:layout_constraintStart_toStartOf="parent"
         mapbox:layout_constraintTop_toTopOf="@+id/spinner"
-        mapbox:layout_constraintVertical_bias="0.225" />
-
-    <TextView
-        android:id="@+id/textView2"
-        android:layout_width="89dp"
-        android:layout_height="50dp"
-        android:layout_marginStart="8dp"
-        android:layout_marginTop="8dp"
-        android:layout_marginEnd="8dp"
-        android:layout_marginBottom="8dp"
-        android:text="TextView"
-        mapbox:layout_constraintBottom_toBottomOf="parent"
-        mapbox:layout_constraintEnd_toEndOf="parent"
-        mapbox:layout_constraintHorizontal_bias="0.026"
-        mapbox:layout_constraintStart_toStartOf="parent"
-        mapbox:layout_constraintTop_toBottomOf="@+id/txt_distace"
-        mapbox:layout_constraintVertical_bias="0.34" />
+        mapbox:layout_constraintVertical_bias="0.673" />
 
     <TextView
         android:id="@+id/txt_distace"
@@ -111,21 +98,22 @@
         android:text="TextView"
         mapbox:layout_constraintBottom_toBottomOf="parent"
         mapbox:layout_constraintEnd_toEndOf="parent"
-        mapbox:layout_constraintHorizontal_bias="0.026"
+        mapbox:layout_constraintHorizontal_bias="0.0"
         mapbox:layout_constraintStart_toStartOf="parent"
         mapbox:layout_constraintTop_toBottomOf="@+id/textView"
-        mapbox:layout_constraintVertical_bias="0.126" />
+        mapbox:layout_constraintVertical_bias="0.0" />
 
     <Spinner
         android:id="@+id/spinner"
-        android:layout_width="350dp"
-        android:layout_height="35dp"
+        android:layout_width="275dp"
+        android:layout_height="28dp"
         android:layout_marginStart="8dp"
-        android:layout_marginTop="2dp"
         android:layout_marginEnd="8dp"
-        mapbox:layout_constraintBottom_toTopOf="@+id/floor_level_buttons"
+        android:layout_marginBottom="8dp"
+        mapbox:layout_constraintBottom_toBottomOf="@+id/mapView"
         mapbox:layout_constraintEnd_toEndOf="parent"
         mapbox:layout_constraintStart_toStartOf="parent"
-        mapbox:layout_constraintTop_toBottomOf="@+id/mapView" />
+        mapbox:layout_constraintTop_toTopOf="@+id/mapView"
+        mapbox:layout_constraintVertical_bias="0.046" />
 
 </android.support.constraint.ConstraintLayout>

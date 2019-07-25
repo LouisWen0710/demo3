@@ -3,4 +3,8 @@
     <color name="colorPrimary">#008577</color>
     <color name="colorPrimaryDark">#00574B</color>
     <color name="colorAccent">#D81B60</color>
+    <color name="mapboxTealDark">#136174</color>
+    <color name="mapboxTeal">#11b4da</color>
+    <color name="mapboxTealLight">#a4deeb</color>
+    <color name="mapboxTealFaint">#d7f1f6</color>
 </resources>
