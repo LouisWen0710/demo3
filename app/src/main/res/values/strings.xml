@@ -5,4 +5,14 @@
         <item>世新管理學院6F</item>
         <item>世新管理學院3F</item>
     </string-array>
+    <string-array name="search">
+        <item>M618</item>
+        <item>資訊管理學系辦</item>
+        <item>經濟學系辦</item>
+        <item>電梯</item>
+        <item>男生廁所</item>
+        <item>女生廁所</item>
+        <item>側門樓梯</item>
+        <item>逃身樓梯</item>
+    </string-array>
 </resources>

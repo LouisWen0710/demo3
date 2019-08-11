@@ -15,14 +15,18 @@ import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorManager;
 import android.location.Location;
+import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
 import android.support.annotation.NonNull;
+import android.support.annotation.RequiresApi;
 import android.support.constraint.ConstraintLayout;
 import android.support.design.widget.Snackbar;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.graphics.drawable.IconCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
+import android.view.LayoutInflater;
 import android.view.OrientationEventListener;
 import android.view.View;
 import android.view.animation.Animation;
@@ -30,6 +34,9 @@ import android.view.animation.RotateAnimation;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.SearchView;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -80,6 +87,8 @@ import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.Vector;
 
 import android.hardware.Sensor;
@@ -119,11 +128,20 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     //------------變數宣告--------//
     private Activity mainactivity;
     private TextView scan_content;
+    Timer timer = new Timer(true);
     private TextView scan_format;
     private TextView txt_dis;
+    private  LinearLayout linearLayout;
+    private  View view;
+    private  String startlocation ;
+    private TextView txt_line;
+    private  TextView stepcount;
+    private  TextView stepdistance;
     private Button scan_btn;
     private  boolean startroute=false;
     private  boolean navistart = false;
+    private  boolean loadcheck = true;
+    private SearchView mSearchView;
     private String scanContent = "";
     private Button load;
     private String line="直線";
@@ -132,15 +150,16 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private Button btn_start;
     //------------變數宣告---ㄦ----//
     //path point-----------------//
-    int count1 = 0, count2 = 0; //起始點跟終點轉換成int
+    int count1 = 0, count2 = 0, countCheck = 0; //起始點跟終點轉換成int
     String PATH;            //選擇路徑
     double distance2 = 0;   //計算終點成為count2 所用到函數
     double LOWD2 = 100000;  //基準值為了不被超過
+    double LOWD3 = 100000;
     double Actualdistance ; //經緯度距離(m)
     LatLng PointArrayUP[];  //路徑所有的點
     private Marker start;   //起始點
     private Marker point;   //終點
-    LatLng StartP, EndP;    //起始點 終點 經緯度
+    LatLng StartP, EndP,EndP2;    //起始點 終點 經緯度
     int latlngIndex = 0;    //check point
     Polyline poly;          //畫線
     private LatLng[] routePP;//route陣列
@@ -153,20 +172,21 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     ArrayList<LatLng> Pts = new ArrayList<>(); //所有路徑的陣列值 未排列
     int pathN;              //json的路徑 每多一條則要增加1
     int preKey,nowKey;      //前一個key, 目前的key
+    int routePcheck = -1;   //check 判斷路徑
     Vector<LatLng> v =new Vector<LatLng>(); //不懂
     HashMap<Integer, LatLng> map = new HashMap<Integer, LatLng>(); //所有路徑陣列且按照Hash方式排列
     HashMap<String, Double> mapdistance = new HashMap<String, Double>();  //不知道要幹嘛
     private static final LatLng M618 = new LatLng(24.98738088163, 121.54823161628);
     private static final LatLng M615 = new LatLng(24.98730118264, 121.5481621635);
     //path------------------------//
-    String MStep ="2";
+    String MStep ="5";  //移動基準值
     private int step = 0;   //步數
     private double oriValue = 0;  //原始值
     private double lstValue = 0;  //上次的值
     private double curValue = 0;  //當前值
     private boolean motiveState = true;   //運動狀態
     private boolean markerYes = false;   //標記
-    double xx , yy ;
+    double xx , yy ; //移動位置
     double angleALL = 0;
     int countD = 0;
     float Rotation[] = new float[9];
@@ -176,7 +196,10 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     double MemberStep = 0;
     double StepLong = 0.000007;
     double AllStep = 0;
-    double foot = 75;
+    double foot = 0.0;
+    double angleAllabs=0;
+    double angleZabs ;
+    private Handler handler = new Handler();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -184,7 +207,19 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         Mapbox.getInstance(this, "pk.eyJ1IjoiODI4MzYyMjUiLCJhIjoiY2p1ZmlyODZ4MGR6bDQzbHA2encxaXhydCJ9.NW6EQXxNywZ14Vr9D9VoHA");
         setContentView(R.layout.activity_main);
         txt_dis = (TextView)findViewById(R.id.txt_distace);
+        txt_line= (TextView)findViewById(R.id.txt_line);;
         load=(Button)findViewById(R.id.load_btn);
+        handler.removeCallbacks(updateTimer);
+        handler.postDelayed(updateTimer, 1000);
+        mSearchView=(SearchView)findViewById(R.id.mSearchView);
+        mSearchView.setQueryHint("搜尋...");
+        LayoutInflater inflater = getLayoutInflater();
+        view=inflater.inflate(R.layout.fragment_indoormap,null);
+        stepcount = (TextView) view.findViewById(R.id.textView3);
+        stepdistance = (TextView) view.findViewById(R.id.textView4);
+        linearLayout=(LinearLayout) findViewById(R.id.linearLayout);
+        String[] countries =getResources().getStringArray(R.array.search);
+        final ArrayAdapter<String> adapter1 = new ArrayAdapter<String>(this,android.R.layout.simple_list_item_1,countries);
 //        Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
 //        setSupportActionBar(toolbar);
 //        toolbar.setTitle("導航");
@@ -213,6 +248,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                         style = "mapbox://styles/82836225/cjyaadi4u04b81ds8josl2vij";//mapbox style網址
                         PATH = "M6Path.geojson";//路徑檔案
                         pathN = 32;
+                        pathclear();
                         clear();
                         loadPath();
                         break;
@@ -221,6 +257,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                         PATH = "M3path.geojson";
                         pathN = 16;
                         clear();
+                        pathclear();
                         loadPath();
                         break;
                 }
@@ -228,7 +265,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                     @Override
                     public void onMapReady(@NonNull MapboxMap mapboxMap) {
                      //   PATH = "map1.geojson";
-                     //   pathN = 3;
                         mapboxMap.setStyle(new Style.Builder().fromUri(style),
                                 new Style.OnStyleLoaded() {
                                     @Override
@@ -251,16 +287,18 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                         mapboxMap1.addOnMapClickListener(new MapboxMap.OnMapClickListener() {
                             @Override
                             public boolean onMapClick(@NonNull LatLng origin) {
-                         //       IconFactory iconFactory = IconFactory.getInstance(MainActivity.this);
-                         //       Icon icon = iconFactory.fromResource(R.drawable.th);
-                                if (point == null) {
-                                    point = mapboxMap1.addMarker(new MarkerOptions().position(origin)//.icon(icon)
-                                             .title("終點"));
-                                } else {
-                                    mapboxMap1.removeMarker(point);
-                                    point = null;
-                                    point = mapboxMap1.addMarker(new MarkerOptions().position(origin)//.icon(icon)
-                                            .title("終點"));
+                                IconFactory iconFactory = IconFactory.getInstance(MainActivity.this);
+                                Icon icon = iconFactory.fromResource(R.drawable.ic_finsh_name);
+                                if(loadcheck == true) {
+                                    if (point == null) {
+                                        point = mapboxMap1.addMarker(new MarkerOptions().position(origin).icon(icon)
+                                                .title("終點"));
+                                    } else {
+                                        mapboxMap1.removeMarker(point);
+                                        point = null;
+                                        point = mapboxMap1.addMarker(new MarkerOptions().position(origin).icon(icon)
+                                                .title("終點"));
+                                    }
                                 }
                                 EndP = new LatLng(origin);
                                 return true;
@@ -302,7 +340,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                                         .add(routePP)
                                         .color(Color.RED)
                                         .width(5));
-                                //  setTimerTask();
                                 Actualdistance = GetDistance(StartP.getLatitude(), StartP.getLongitude(), EndP.getLatitude(), EndP.getLongitude());
                                 txt_dis.setText(String.valueOf(Actualdistance));
                                 markerYes = true;
@@ -332,6 +369,30 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 snackbar();
                 startroute=true;
                 navistart=true;
+                loadcheck = false;
+                linearLayout.addView(view);
+                stepdistance.setText("距離："+String.valueOf(Actualdistance)+"公尺");
+                stepcount.setText("步數："+String.valueOf(foot)+"步");
+
+            }
+        });
+        mSearchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
+            @Override
+            public boolean onQueryTextSubmit(String query) {
+                switch (query){
+                    case "M618" :
+                        start = mapboxMap1.addMarker(new MarkerOptions().position(M618).title("起點"));
+                        break;
+            }
+                Toast.makeText(MainActivity.this, "搜尋結果為：" + query, Toast.LENGTH_SHORT).show();
+                startlocation=query;
+                return false;
+            }
+
+            @Override
+            public boolean onQueryTextChange(String newText) {
+                adapter1.getFilter().filter(newText);
+                return false;
             }
         });
         sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
@@ -351,8 +412,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     //QRCODE
     public void onActivityResult(int requestCode, int resultCode, Intent intent) {
         IntentResult scanningResult = IntentIntegrator.parseActivityResult(requestCode, resultCode, intent);
-    //    IconFactory iconFactory = IconFactory.getInstance(MainActivity.this);
-    //    Icon icon = iconFactory.fromResource(R.drawable.th);
+        IconFactory iconFactory = IconFactory.getInstance(MainActivity.this);
+        Icon icon = iconFactory.fromResource(R.drawable.ic_start_name);
         if (scanningResult != null) {
             scanContent = scanningResult.getContents();
             String scanFormat = scanningResult.getFormatName();
@@ -362,23 +423,23 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             Toast.makeText(getApplicationContext(), "nothing", Toast.LENGTH_SHORT).show();
             super.onActivityResult(requestCode, resultCode, intent);
         }
+        startlocation = scanContent;
         switch (scanContent) {
             case "M618":
-                start = mapboxMap1.addMarker(new MarkerOptions().position(M618).title("起點")//.icon(icon)
+                start = mapboxMap1.addMarker(new MarkerOptions().position(M618).title("起點").icon(icon)
                 );
                 break;
             case "M617":
-                start = mapboxMap1.addMarker(new MarkerOptions().position(M615).title("起點")//.icon(icon)
+                start = mapboxMap1.addMarker(new MarkerOptions().position(M615).title("起點").icon(icon)
                 );
                 break;
         }
-       //  setTimerTask();
 }
   public void snackbar()
   {
       constraintLayout= findViewById(R.id.constraint);
 
-      Snackbar snackbar = Snackbar.make(constraintLayout,"距離："+String.valueOf(Actualdistance)+"公尺"+" "+"目前："+line+"\n"+String.valueOf(foot)+"腳步",Snackbar.LENGTH_INDEFINITE)
+      Snackbar snackbar = Snackbar.make(constraintLayout,startlocation+"\n"+"前往",Snackbar.LENGTH_INDEFINITE)
               .setAction("結束", new View.OnClickListener() {
                   @Override
                   public void onClick(View v) {
@@ -386,6 +447,10 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                       snackbar1.show();
                       startroute=false;
                       navistart=false;
+                      markerYes = false;
+                      loadcheck = true;
+                      linearLayout.removeAllViews();
+                     // timer.cancel();
                       clear();
                   }
               }).setActionTextColor(Color.RED);
@@ -414,9 +479,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             JSONObject json = new JSONObject(sb.toString());
 
             JSONArray features = json.getJSONArray("features");
-            Log.e("json5:", "5");
             for (int i = 0; i < pathN; i++) {
-                Log.e("json2:", "3");
                 JSONObject feature = features.getJSONObject(i);
 
                 JSONObject geometry = feature.getJSONObject("geometry");
@@ -618,6 +681,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     //傳感器-------地圖旋轉
     public void onSensorChanged(SensorEvent event) {
         final float alpha = 0.97f; //alpha值是用來過濾一些雜訊，降低誤差值。
+        IconFactory iconFactory = IconFactory.getInstance(MainActivity.this);
+        Icon icon = iconFactory.fromResource(R.drawable.ic_start_name);
         synchronized (this) {
             if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
                 mGravity[0] = alpha * mGravity[0] + (1 - alpha) * event.values[0];
@@ -709,22 +774,26 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
 
                             if (angleALL != 0) { //加總陀螺儀的角度
-                                if (angleyz > 15) {  //大於10才判定有旋轉 //陀螺儀算出來的角度
+                                if (angleyz > 15 || angleyz < -15) {  //大於10才判定有旋轉 //陀螺儀算出來的角度
+                                    angleZabs = Math.abs(angleyz);
+                                    angleAllabs = angleAllabs +angleZabs;
                                     angleALL = angleALL + angleyz;
-                                    if (angleALL > 5000) {
+                                    if (angleAllabs > 3000) {
                                         line = "轉彎";
                                     }
                                 } else {
                                     line = "直線";
                                 }
+                                txt_line.setText(line);
                                 xx = (Math.cos(Math.toRadians(angleALL)));
                                 yy = (Math.sin(Math.toRadians(angleALL)));
-                                angleALL=0;
+                                Log.e("angleall:", String.valueOf(angleALL));
+                             //   angleALL=0;
                             } else {
                                 xx = (Math.cos(Math.toRadians(degree[0]))); //直走 這邊要修改不是等於degree[0] 應該要等於上一次的angeALL 因為每次的degree[0]會改變
                                 yy = (Math.sin(Math.toRadians(degree[0])));
                                 angleALL = degree[0];
-                                Log.e("degree:", String.valueOf(degree));
+                                Log.e("degree:", String.valueOf(angleALL));
                             }
 
                             //計算下一點定位位置
@@ -736,12 +805,10 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                             StepPath[0] = start.getPosition();
 
                             if (markerYes) {
-                                //    stepCount.setText(String.valueOf(AllStep));
-                                //   stepLong.setText(String.valueOf(foot));
                                 if (start!=null)
                                 {
                                     start.remove();
-                                    start = mapboxMap1.addMarker(new MarkerOptions().position(new LatLng(X, Y)).title("You"));
+                                    start = mapboxMap1.addMarker(new MarkerOptions().position(new LatLng(X, Y)).title("You").icon(icon));
                                     Log.e("移動座標", String.valueOf(X)+"--"+String.valueOf(Y));
                                     ss++;
                                     StartP = new LatLng(start.getPosition().getLatitude(), start.getPosition().getLongitude());
@@ -759,7 +826,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                                     countD++;
                                     if (countD < 2) {
                                     }
-                                    //FinishD();
+                                    FinishD();
                                 }
 
                             }
@@ -768,12 +835,33 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                     }
                 }
             }
-            if(ss>10)
+            if(ss>5)
             {
                 NaviDo();
                 ss=0;
             }
         }
+    }
+    public void FinishD() {
+        new android.app.AlertDialog.Builder(MainActivity.this)
+                .setTitle("抵達目的地 !")
+                .setIcon(R.drawable.ic_finish)
+                .setPositiveButton("OK",
+                        new DialogInterface.OnClickListener() {
+
+                            @Override
+                            public void onClick(DialogInterface dialog, int which) {
+                                start.remove();
+                                point.remove();
+                                poly.remove();
+                                markerYes = false;
+                         //     timer.cancel();
+                                loadcheck = true;
+                                startroute=false;
+                                navistart=false;
+                            }
+
+                        }).show();
     }
 
     public void NaviDo() {
@@ -782,14 +870,15 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         anglez = 0;
         angle[1] = 0;
         angle[2] = 0;
-    //    EndP = new LatLng(blocation);
+  //      EndP2 = new LatLng(blocation);
         Actualdistance = GetDistance(StartP.getLatitude(), StartP.getLongitude(), EndP.getLatitude(), EndP.getLongitude());
-        StepLong = (Actualdistance / MemberStep) * 0.00000900900901;//因為是公尺所以*0.00000900900901代表一度
         foot = (Actualdistance / MemberStep);
+        stepdistance.setText("距離："+String.valueOf(Actualdistance)+"公尺");
+        stepcount.setText("步數："+String.valueOf(foot)+"步");
+ //       StepLong = (Actualdistance / MemberStep) * 0.00000900900901;//因為是公尺所以*0.00000900900901代表一度
         MemberStep = 0;
-        txt_dis.setText(String.valueOf(Actualdistance));
- //       StartP = new LatLng(EndP);
-//        blocation = new LatLng(blocation.getLatitude(),blocation.getLongitude());
+ //       txt_dis.setText(String.valueOf(Actualdistance));
+ //       StartP = new LatLng(EndP2);
  //       start = mapboxMap1.addMarker(new MarkerOptions().position(new LatLng(blocation)));
 
     }
@@ -812,6 +901,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                     .bearing(bearing).zoom(20).tilt(60).build();
             mapboxMap1.animateCamera(CameraUpdateFactory.newCameraPosition(currentPlace1), 2000);
         }
+   //     Log.e("degree:", String.valueOf(bearing));
     }
     @Override
     public void onAccuracyChanged(Sensor sensor, int accuracy) {
@@ -823,7 +913,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         zCoeff = accZ / 10;
      //   Log.e("角", angley + "," + anglez);
         angleyz = (angley * yCoeff) + (anglez * zCoeff);
-        Log.e("角度:", String.valueOf(angleyz));
+     //   Log.e("角度:", String.valueOf(angleyz));
 
     }
     //計算該緯度上的精度長度
@@ -848,7 +938,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         s = Math.round(s * 10000) / 10000;
         return s;
     }
-    public  void clear() {
+    public void clear() {
         if (poly != null) {
             mapboxMap1.removePolyline(poly);
         }
@@ -864,5 +954,67 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             start = null;
         }
     }
+    //使用timer持續搜尋
+    private Runnable updateTimer = new Runnable() {
+        public void run() {
+            Log.e("Timer:", String.valueOf("TimerOK"));
+            if(navistart == true) {
+                CheckUserRoad();
+            }
+            handler.postDelayed(this, 1000);
+        }
+    };
+
+    public void CheckUserRoad() {
+        double Dcheck = 0;
+        int OtherP = 0;
+        for (int i = 0; i < poly.getPoints().size(); i++) {
+            Dcheck = start.getPosition().distanceTo(poly.getPoints().get(i));
+            if (Dcheck <= LOWD3) {
+                countCheck = i;
+                LOWD3 = Dcheck;
+            }
+        }
+        LOWD3 = 10000; //設10000只是故意設一個比較大的數字防止超過
+        if (start.getPosition().distanceTo(poly.getPoints().get(countCheck)) > 5|| ss==5) {
+            for (int i = 0; i < map.size(); i++) {
+                distance2 = start.getPosition().distanceTo(map.get(i));
+                if (distance2 <= LOWD2) {
+                    OtherP = i;
+                    LOWD2 = distance2;
+                }
+            //    Log.e("checkload:", String.valueOf(countCheck));
+            }
+
+            LOWD2 = 10000;
+            if (ArrayC) {
+                result.clear();
+            }
+            Log.e("checkload:", String.valueOf(OtherP));
+            findCheapestPath(OtherP, count2, w1);
+            routePP = new LatLng[result.size()];
+            for (int i = 0; i < result.size(); i++) {
+                routePP[i] = map.get(result.get(i));
+            }
+            if (routePcheck != OtherP) {
+                mapboxMap1.removePolyline(poly);
+                poly = mapboxMap1.addPolyline(new PolylineOptions()
+                        .add(routePP)
+                        .color(Color.RED)
+                        .width(5));
+                routePcheck = OtherP;
+            }
+        }
+    }
+    private void  pathclear()
+    {
+        try {
+            InputStream inputStream = getAssets().open(PATH);
+            inputStream.close();
+            inputStream.reset();
+        }
+        catch (Exception exception){}
+    }
+
 }
 

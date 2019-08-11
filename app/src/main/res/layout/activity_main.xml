@@ -17,7 +17,7 @@
         android:layout_marginRight="2dp"
         mapbox:layout_constraintBottom_toBottomOf="parent"
         mapbox:layout_constraintEnd_toEndOf="parent"
-        mapbox:layout_constraintHorizontal_bias="0.333"
+        mapbox:layout_constraintHorizontal_bias="0.0"
         mapbox:layout_constraintStart_toStartOf="parent"
         mapbox:layout_constraintTop_toTopOf="parent"
         mapbox:layout_constraintVertical_bias="0.0"
@@ -85,7 +85,23 @@
         mapbox:layout_constraintHorizontal_bias="0.0"
         mapbox:layout_constraintStart_toStartOf="parent"
         mapbox:layout_constraintTop_toTopOf="@+id/spinner"
-        mapbox:layout_constraintVertical_bias="0.673" />
+        mapbox:layout_constraintVertical_bias="0.549" />
+
+    <TextView
+        android:id="@+id/txt_line"
+        android:layout_width="89dp"
+        android:layout_height="50dp"
+        android:layout_marginStart="8dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginEnd="8dp"
+        android:layout_marginBottom="8dp"
+        android:text="TextView"
+        mapbox:layout_constraintBottom_toBottomOf="parent"
+        mapbox:layout_constraintEnd_toEndOf="parent"
+        mapbox:layout_constraintHorizontal_bias="0.0"
+        mapbox:layout_constraintStart_toStartOf="parent"
+        mapbox:layout_constraintTop_toTopOf="@+id/spinner"
+        mapbox:layout_constraintVertical_bias="0.652" />
 
     <TextView
         android:id="@+id/txt_distace"
@@ -101,7 +117,7 @@
         mapbox:layout_constraintHorizontal_bias="0.0"
         mapbox:layout_constraintStart_toStartOf="parent"
         mapbox:layout_constraintTop_toBottomOf="@+id/textView"
-        mapbox:layout_constraintVertical_bias="0.0" />
+        mapbox:layout_constraintVertical_bias="0.308" />
 
     <Spinner
         android:id="@+id/spinner"
@@ -114,6 +130,28 @@
         mapbox:layout_constraintEnd_toEndOf="parent"
         mapbox:layout_constraintStart_toStartOf="parent"
         mapbox:layout_constraintTop_toTopOf="@+id/mapView"
-        mapbox:layout_constraintVertical_bias="0.046" />
+        mapbox:layout_constraintVertical_bias="0.105" />
+
+    <SearchView
+        android:id="@+id/mSearchView"
+        android:layout_width="301dp"
+        android:layout_height="36dp"
+        android:layout_marginStart="8dp"
+        android:layout_marginTop="5dp"
+        android:layout_marginEnd="8dp"
+        android:layout_marginBottom="5dp"
+        mapbox:layout_constraintBottom_toTopOf="@+id/spinner"
+        mapbox:layout_constraintEnd_toEndOf="parent"
+        mapbox:layout_constraintHorizontal_bias="0.491"
+        mapbox:layout_constraintStart_toStartOf="parent"
+        mapbox:layout_constraintTop_toTopOf="@+id/mapView">
+
+    </SearchView>
+
+    <LinearLayout
+        android:id="@+id/linearLayout"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"></LinearLayout>
 
 </android.support.constraint.ConstraintLayout>
