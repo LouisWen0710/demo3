@@ -9,12 +9,20 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
+import android.content.res.AssetManager;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.graphics.drawable.BitmapDrawable;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorManager;
+import android.icu.text.DecimalFormat;
 import android.location.Location;
+import android.net.Uri;
+import android.nfc.Tag;
+import android.opengl.GLES20;
+import android.opengl.GLSurfaceView;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -26,8 +34,11 @@ import android.support.v4.app.ActivityCompat;
 import android.support.v4.graphics.drawable.IconCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
+import android.util.Pair;
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.OrientationEventListener;
+import android.view.SurfaceView;
 import android.view.View;
 import android.view.animation.Animation;
 import android.view.animation.RotateAnimation;
@@ -41,6 +52,33 @@ import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.banjo.ewilson.ardistance.common.helpers.DisplayRotationHelper;
+import com.google.ar.core.ArCoreApk;
+import com.google.ar.core.AugmentedImage;
+import com.google.ar.core.AugmentedImageDatabase;
+import com.google.ar.core.Camera;
+import com.google.ar.core.Config;
+import com.google.ar.core.Frame;
+import com.google.ar.core.HitResult;
+import com.google.ar.core.Plane;
+import com.google.ar.core.Point;
+import com.google.ar.core.PointCloud;
+import com.google.ar.core.Pose;
+import com.google.ar.core.Session;
+import com.google.ar.core.Trackable;
+import com.google.ar.core.TrackingState;
+import com.google.ar.core.exceptions.CameraNotAvailableException;
+import com.google.ar.core.exceptions.UnavailableApkTooOldException;
+import com.google.ar.core.exceptions.UnavailableArcoreNotInstalledException;
+import com.google.ar.core.exceptions.UnavailableDeviceNotCompatibleException;
+import com.google.ar.core.exceptions.UnavailableSdkTooOldException;
+import com.google.ar.core.exceptions.UnavailableUserDeclinedInstallationException;
+import com.google.ar.sceneform.FrameTime;
+import com.google.ar.sceneform.Node;
+import com.google.ar.sceneform.math.Quaternion;
+import com.google.ar.sceneform.math.Vector3;
+import com.google.ar.sceneform.rendering.MaterialFactory;
+import com.google.ar.sceneform.rendering.ShapeFactory;
 import com.google.zxing.integration.android.IntentIntegrator;
 import com.google.zxing.integration.android.IntentResult;
 import com.mapbox.android.core.location.LocationEngineResult;
@@ -53,7 +91,6 @@ import com.mapbox.api.directions.v5.models.DirectionsRoute;
 import com.mapbox.api.matching.v5.MapboxMapMatching;
 import com.mapbox.api.matching.v5.models.MapMatchingResponse;
 import com.mapbox.core.utils.TextUtils;
-import com.mapbox.geojson.Point;
 import com.mapbox.mapboxsdk.Mapbox;
 import com.mapbox.mapboxsdk.annotations.Icon;
 import com.mapbox.mapboxsdk.annotations.IconFactory;
@@ -74,19 +111,28 @@ import com.mapbox.mapboxsdk.maps.MapView;
 import com.mapbox.mapboxsdk.maps.MapboxMap;
 import com.mapbox.mapboxsdk.maps.OnMapReadyCallback;
 import com.mapbox.mapboxsdk.maps.Style;
-import com.mapbox.services.android.navigation.v5.navigation.MapboxNavigation;
-import com.mapbox.services.android.navigation.v5.navigation.MapboxNavigationOptions;
-import com.mapbox.services.android.navigation.v5.navigation.NavigationRoute;
+import com.banjo.ewilson.ardistance.common.helpers.CameraPermissionHelper;
+import com.banjo.ewilson.ardistance.common.helpers.DisplayRotationHelper;
+import com.banjo.ewilson.ardistance.common.helpers.FullScreenHelper;
+import com.banjo.ewilson.ardistance.common.helpers.SnackbarHelper;
+import com.banjo.ewilson.ardistance.common.helpers.TapHelper;
+import com.banjo.ewilson.ardistance.common.rendering.BackgroundRenderer;
+import com.banjo.ewilson.ardistance.common.rendering.ObjectRenderer;
+import com.banjo.ewilson.ardistance.common.rendering.PlaneRenderer;
+import com.banjo.ewilson.ardistance.common.rendering.PointCloudRenderer;
 
 
 import java.io.BufferedReader;
 import java.io.FileInputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.Charset;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.Vector;
@@ -97,14 +143,25 @@ import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.support.v7.widget.Toolbar;
 
+import org.checkerframework.common.value.qual.StringVal;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
 import static android.Manifest.permission.ACCESS_FINE_LOCATION;
 import static android.Manifest.permission.BODY_SENSORS;
 import static android.Manifest.permission.CAMERA;
+import static java.security.AccessController.getContext;
 
-public class MainActivity extends AppCompatActivity implements SensorEventListener {
+import com.google.ar.core.Anchor;
+import com.google.ar.sceneform.AnchorNode;
+import com.google.ar.sceneform.rendering.ModelRenderable;
+import com.google.ar.sceneform.ux.ArFragment;
+import com.google.ar.sceneform.ux.TransformableNode;
+
+import javax.microedition.khronos.egl.EGLConfig;
+import javax.microedition.khronos.opengles.GL10;
+
+public class MainActivity extends AppCompatActivity implements SensorEventListener, GLSurfaceView.Renderer {
     private MapboxMap mapboxMap1;
     private MapView mapView;
     String style="mapbox://styles/82836225/cjyaadi4u04b81ds8josl2vi"; //預設樣式
@@ -129,25 +186,27 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private Activity mainactivity;
     private TextView scan_content;
     Timer timer = new Timer(true);
-    private TextView scan_format;
     private TextView txt_dis;
     private  LinearLayout linearLayout;
     private  View view;
     private  String startlocation ;
-    private TextView txt_line;
+    private TextView txt_movedis;
     private  TextView stepcount;
     private  TextView stepdistance;
+    private  ImageView imageView;
     private Button scan_btn;
     private  boolean startroute=false;
     private  boolean navistart = false;
+    private boolean shouldConfigureSession = false;
     private  boolean loadcheck = true;
     private SearchView mSearchView;
     private String scanContent = "";
     private Button load;
-    private String line="直線";
+    private String bug;
     private  int ss=0;
     private ConstraintLayout constraintLayout;
     private Button btn_start;
+    private  String armovecheck= "0";
     //------------變數宣告---ㄦ----//
     //path point-----------------//
     int count1 = 0, count2 = 0, countCheck = 0; //起始點跟終點轉換成int
@@ -159,7 +218,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     LatLng PointArrayUP[];  //路徑所有的點
     private Marker start;   //起始點
     private Marker point;   //終點
-    LatLng StartP, EndP,EndP2;    //起始點 終點 經緯度
+    LatLng StartP,StartP2, EndP,EndP2;    //起始點 終點 經緯度
+    LatLng blocation;
     int latlngIndex = 0;    //check point
     Polyline poly;          //畫線
     private LatLng[] routePP;//route陣列
@@ -173,11 +233,14 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     int pathN;              //json的路徑 每多一條則要增加1
     int preKey,nowKey;      //前一個key, 目前的key
     int routePcheck = -1;   //check 判斷路徑
+    private final boolean useSingleImage = false;
     Vector<LatLng> v =new Vector<LatLng>(); //不懂
     HashMap<Integer, LatLng> map = new HashMap<Integer, LatLng>(); //所有路徑陣列且按照Hash方式排列
     HashMap<String, Double> mapdistance = new HashMap<String, Double>();  //不知道要幹嘛
     private static final LatLng M618 = new LatLng(24.98738088163, 121.54823161628);
     private static final LatLng M615 = new LatLng(24.98730118264, 121.5481621635);
+    private static final LatLng Femaletoilet = new LatLng(24.98723136526, 121.54774546606);
+    private static final LatLng Maletoilet = new LatLng(24.98725468802, 121.54791221823);
     //path------------------------//
     String MStep ="5";  //移動基準值
     private int step = 0;   //步數
@@ -193,13 +256,45 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     float[] degree = new float[3];
     private float currentDegree = 0f;
     LatLng[] StepPath = new LatLng[2];
-    double MemberStep = 0;
+    int MemberStep = 0;
     double StepLong = 0.000007;
     double AllStep = 0;
-    double foot = 0.0;
+    double trangle ;
+    DecimalFormat foots = new DecimalFormat("0.00");
+    double foot = 0;
+    private final Map<Integer, Pair<AugmentedImage, Anchor>> augmentedImageMap = new HashMap<>();
     double angleAllabs=0;
     double angleZabs ;
+    // Rendering. The Renderers are created here, and initialized when the GL surface is created.
+    private GLSurfaceView surfaceView; //平面
+    private boolean installRequested;  //狀態
+
+    private Session session;
+    private final com.banjo.ewilson.ardistance.common.helpers.SnackbarHelper messageSnackbarHelper = new com.banjo.ewilson.ardistance.common.helpers.SnackbarHelper(); //ARCore的套件
+    private com.banjo.ewilson.ardistance.common.helpers.DisplayRotationHelper displayRotationHelper;
+    private com.banjo.ewilson.ardistance.common.helpers.TapHelper tapHelper; //手指觸控螢幕
+
+
+    private final com.banjo.ewilson.ardistance.common.rendering.BackgroundRenderer backgroundRenderer = new com.banjo.ewilson.ardistance.common.rendering.BackgroundRenderer();
+    private final com.banjo.ewilson.ardistance.common.rendering.ObjectRenderer virtualObject = new com.banjo.ewilson.ardistance.common.rendering.ObjectRenderer();
+    private final com.banjo.ewilson.ardistance.common.rendering.PlaneRenderer planeRenderer = new com.banjo.ewilson.ardistance.common.rendering.PlaneRenderer();
+    private final com.banjo.ewilson.ardistance.common.rendering.PointCloudRenderer pointCloudRenderer = new com.banjo.ewilson.ardistance.common.rendering.PointCloudRenderer();
+
+
+    // Temporary matrix allocated here to reduce number of allocations for each frame.
+    //此處分配的臨時矩陣用於減少每幀的分配數量。
+    private final float[] anchorMatrix = new float[16];
+
+    // Anchors created from taps used for object placing.
+
+    private final ArrayList<Anchor> anchors = new ArrayList<>();
+    private final ArrayList<Anchor> anchorstart = new ArrayList<>();
     private Handler handler = new Handler();
+    private static final LatLng CheckpointA = new LatLng(24.98731645596, 121.54824469205);
+    private static final LatLng CheckpointB = new LatLng(24.98726978379, 121.54799250156);
+    private static final LatLng CheckpointC = new LatLng(24.98724716065, 121.54787025872);
+    String check = "0";
+    int[] imgId={R.drawable.ic_maneuver_depart,R.drawable.ic_maneuver_depart_left,R.drawable.ic_maneuver_depart_right};
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -207,7 +302,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         Mapbox.getInstance(this, "pk.eyJ1IjoiODI4MzYyMjUiLCJhIjoiY2p1ZmlyODZ4MGR6bDQzbHA2encxaXhydCJ9.NW6EQXxNywZ14Vr9D9VoHA");
         setContentView(R.layout.activity_main);
         txt_dis = (TextView)findViewById(R.id.txt_distace);
-        txt_line= (TextView)findViewById(R.id.txt_line);;
+        txt_movedis= (TextView)findViewById(R.id.txt_line);;
         load=(Button)findViewById(R.id.load_btn);
         handler.removeCallbacks(updateTimer);
         handler.postDelayed(updateTimer, 1000);
@@ -218,7 +313,11 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         stepcount = (TextView) view.findViewById(R.id.textView3);
         stepdistance = (TextView) view.findViewById(R.id.textView4);
         linearLayout=(LinearLayout) findViewById(R.id.linearLayout);
+        imageView = (ImageView) view.findViewById(R.id.imageView4);
         String[] countries =getResources().getStringArray(R.array.search);
+        surfaceView = findViewById(R.id.surfaceview);
+        //displayRotationHelper = new DisplayRotationHelper(/*context=*/ this);
+        //tapHelper = new TapHelper(/*context=*/ this);
         final ArrayAdapter<String> adapter1 = new ArrayAdapter<String>(this,android.R.layout.simple_list_item_1,countries);
 //        Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
 //        setSupportActionBar(toolbar);
@@ -329,6 +428,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                                 LOWD2 = 10000;
                                 //      destination = mapboxMap1.addMarker(new MarkerOptions().position((map.get(count2))).title("終點"));
                                 StartP = new LatLng(start.getPosition().getLatitude(), start.getPosition().getLongitude());
+                                // starp2 記錄起點
+                                StartP2 = StartP;
 
                                 findCheapestPath(count1, count2, w1);
 
@@ -366,26 +467,39 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         btn_start.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                snackbar();
+              //  snackbar();
                 startroute=true;
                 navistart=true;
                 loadcheck = false;
                 linearLayout.addView(view);
                 stepdistance.setText("距離："+String.valueOf(Actualdistance)+"公尺");
-                stepcount.setText("步數："+String.valueOf(foot)+"步");
+                foot = Actualdistance/0.70;
+                String footz = foots.format(foot);
+                stepcount.setText("步數："+footz+"步");
 
             }
         });
         mSearchView.setOnQueryTextListener(new SearchView.OnQueryTextListener() {
+            IconFactory iconFactory = IconFactory.getInstance(MainActivity.this);
+            Icon icon = iconFactory.fromResource(R.drawable.ic_start_name);
             @Override
             public boolean onQueryTextSubmit(String query) {
                 switch (query){
                     case "M618" :
-                        start = mapboxMap1.addMarker(new MarkerOptions().position(M618).title("起點"));
+                        start = mapboxMap1.addMarker(new MarkerOptions().position(M618).title("起點").icon(icon));
+                        startlocation="M618";
+                        break;
+                    case "男生廁所":
+                        start = mapboxMap1.addMarker(new MarkerOptions().position(Maletoilet).title("起點").icon(icon)
+                        );
+                        break;
+                    case "女生廁所":
+                        start = mapboxMap1.addMarker(new MarkerOptions().position(Femaletoilet).title("起點").icon(icon)
+                        );
                         break;
             }
                 Toast.makeText(MainActivity.this, "搜尋結果為：" + query, Toast.LENGTH_SHORT).show();
-                startlocation=query;
+
                 return false;
             }
 
@@ -395,45 +509,79 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 return false;
             }
         });
+        tapHelper = new com.banjo.ewilson.ardistance.common.helpers.TapHelper(/*context=*/ this);
+        displayRotationHelper = new com.banjo.ewilson.ardistance.common.helpers.DisplayRotationHelper(/*context=*/ this);
+        // Set up tap listener.
+        // Set up renderer.
+        surfaceView.setOnTouchListener(tapHelper);
+        surfaceView.setPreserveEGLContextOnPause(true);
+        surfaceView.setEGLContextClientVersion(2);
+        surfaceView.setEGLConfigChooser(8, 8, 8, 8, 16, 0); // Alpha used for plane blending.
+        surfaceView.setRenderer(this);
+        surfaceView.setWillNotDraw(false);
+        surfaceView.setRenderMode(GLSurfaceView.RENDERMODE_CONTINUOUSLY);
+
+        installRequested = false;
         sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
 //請求權限～
-        int permission = ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION);
-        if (permission != PackageManager.PERMISSION_GRANTED) {
-            //未取得權限，這邊要取得。
-            //以下動作是向使用者取得權限。
-            ActivityCompat.requestPermissions(this, new String[]{ACCESS_FINE_LOCATION, CAMERA, BODY_SENSORS}, Requestcode);
-        } else {
-            //取得完畢，進行下一步動作。
-        }
+        checkPermission();
     }
-
-
-
+    private void checkPermission()
+        {
+         if(ActivityCompat.checkSelfPermission(this, ACCESS_FINE_LOCATION)!=PackageManager.PERMISSION_GRANTED)
+         {
+             ActivityCompat.requestPermissions(this,new String[]{ACCESS_FINE_LOCATION,CAMERA,BODY_SENSORS},200);
+         }
+        }
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+       if(requestCode==200)
+       {
+           if(grantResults[0]==PackageManager.PERMISSION_GRANTED){}
+           if(grantResults[1]==PackageManager.PERMISSION_GRANTED){}
+           if(grantResults[2]==PackageManager.PERMISSION_GRANTED){}
+       }
+       else
+       {
+           Toast.makeText(this,"需要權限允許才能運作",Toast.LENGTH_SHORT).show();
+       }
+    }
     //QRCODE
     public void onActivityResult(int requestCode, int resultCode, Intent intent) {
         IntentResult scanningResult = IntentIntegrator.parseActivityResult(requestCode, resultCode, intent);
         IconFactory iconFactory = IconFactory.getInstance(MainActivity.this);
         Icon icon = iconFactory.fromResource(R.drawable.ic_start_name);
         if (scanningResult != null) {
-            scanContent = scanningResult.getContents();
-            String scanFormat = scanningResult.getFormatName();
-            scan_content.setText(scanContent);
+            if(scanningResult.getContents() != null) {
+                scanContent = scanningResult.getContents();
+                //  String scanFormat = scanningResult.getFormatName();
+                scan_content.setText(scanContent);
+                //startlocation = scanContent;
+                switch (scanContent) {
+                    case "M618":
+                        start = mapboxMap1.addMarker(new MarkerOptions().position(M618).title("起點").icon(icon)
+                        );
+                        startlocation="M618";
+                        break;
+                    case "M617":
+                        start = mapboxMap1.addMarker(new MarkerOptions().position(M615).title("起點").icon(icon)
+                        );
+                        break;
+                    case "Maletoilet":
+                        start = mapboxMap1.addMarker(new MarkerOptions().position(Maletoilet).title("起點").icon(icon)
+                        );
+                        break;
+                    case "Femaletoilet":
+                        start = mapboxMap1.addMarker(new MarkerOptions().position(Femaletoilet).title("起點").icon(icon)
+                        );
+                        break;
+                }
+            }
       //      scan_format.setText(scanFormat);
         } else {
             Toast.makeText(getApplicationContext(), "nothing", Toast.LENGTH_SHORT).show();
             super.onActivityResult(requestCode, resultCode, intent);
         }
-        startlocation = scanContent;
-        switch (scanContent) {
-            case "M618":
-                start = mapboxMap1.addMarker(new MarkerOptions().position(M618).title("起點").icon(icon)
-                );
-                break;
-            case "M617":
-                start = mapboxMap1.addMarker(new MarkerOptions().position(M615).title("起點").icon(icon)
-                );
-                break;
-        }
+
 }
   public void snackbar()
   {
@@ -639,7 +787,71 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     protected void onResume() {
         super.onResume();
         mapView.onResume();
+        if (session == null) {
+            Exception exception = null;
+            String message = null;
+            try {
+                switch (ArCoreApk.getInstance().requestInstall(this, !installRequested)) {
+                    case INSTALL_REQUESTED:
+                        installRequested = true;
+                        return;
+                    case INSTALLED:
+                        break;
+                }
 
+                // ARCore requires camera permissions to operate. If we did not yet obtain runtime
+                // permission on Android M and above, now is a good time to ask the user for it.
+                if (!com.banjo.ewilson.ardistance.common.helpers.CameraPermissionHelper.hasCameraPermission(this)) {
+                    com.banjo.ewilson.ardistance.common.helpers.CameraPermissionHelper.requestCameraPermission(this);
+                    return;
+                }
+
+                // Create the session.
+                session = new Session(/* context= */ this);
+                // 對應不同情況給予不同的訊息。
+            } catch (UnavailableArcoreNotInstalledException
+                    | UnavailableUserDeclinedInstallationException e) {
+                message = "Please install ARCore";
+                exception = e;
+            } catch (UnavailableApkTooOldException e) {
+                message = "Please update ARCore";
+                exception = e;
+            } catch (UnavailableSdkTooOldException e) {
+                message = "Please update this app";
+                exception = e;
+            } catch (UnavailableDeviceNotCompatibleException e) {
+                message = "This device does not support AR";
+                exception = e;
+            } catch (Exception e) {
+                message = "Failed to create AR session";
+                exception = e;
+            }
+
+            if (message != null) {
+                messageSnackbarHelper.showError(this, message);
+                return;
+            }
+            shouldConfigureSession = true;
+        }
+        if (shouldConfigureSession) {
+            configureSession();
+            shouldConfigureSession = false;
+        }
+        try {
+            session.resume();
+        } catch (CameraNotAvailableException e) {
+            // In some cases (such as another camera app launching) the camera may be given to
+            // a different app instead. Handle this properly by showing a message and recreate the
+            // session at the next iteration.
+            messageSnackbarHelper.showError(this, "Camera not available. Please restart the app.");
+            session = null;
+            return;
+        }
+
+        surfaceView.onResume();
+        displayRotationHelper.onResume();
+
+        messageSnackbarHelper.showMessage(this, "Searching for surfaces...");
         sensorManager .registerListener(this, sensorManager.getDefaultSensor(Sensor.TYPE_MAGNETIC_FIELD), sensorManager.SENSOR_DELAY_GAME);
         sensorManager .registerListener(this, sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), sensorManager.SENSOR_DELAY_GAME);
         sensorManager .registerListener(this, sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE), sensorManager.SENSOR_DELAY_GAME);
@@ -648,9 +860,15 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     protected void onPause() {
         super.onPause();
         mapView.onPause();
-
         sensorManager.unregisterListener(this);
-
+        if (session != null) {
+            // Note that the order matters - GLSurfaceView is paused first so that it does not try
+            // to query the session. If Session is paused before GLSurfaceView, GLSurfaceView may
+            // still call session.update() and get a SessionPausedException.
+            displayRotationHelper.onPause();
+            surfaceView.onPause();
+            session.pause();
+        }
     }
 
     @Override
@@ -766,6 +984,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                     if (curValue <= lstValue) lstValue = curValue;
                     else {
                         if (Math.abs(curValue - lstValue) > range) {
+                            armovecheck = "1";
                             //檢測到一次峰值
                             oriValue = curValue;
                             //start.remove();
@@ -774,17 +993,14 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
 
                             if (angleALL != 0) { //加總陀螺儀的角度
-                                if (angleyz > 15 || angleyz < -15) {  //大於10才判定有旋轉 //陀螺儀算出來的角度
+                                if (angleyz > 15 ) {  //大於10才判定有旋轉 //陀螺儀算出來的角度
                                     angleZabs = Math.abs(angleyz);
                                     angleAllabs = angleAllabs +angleZabs;
                                     angleALL = angleALL + angleyz;
                                     if (angleAllabs > 3000) {
-                                        line = "轉彎";
                                     }
                                 } else {
-                                    line = "直線";
                                 }
-                                txt_line.setText(line);
                                 xx = (Math.cos(Math.toRadians(angleALL)));
                                 yy = (Math.sin(Math.toRadians(angleALL)));
                                 Log.e("angleall:", String.valueOf(angleALL));
@@ -798,21 +1014,22 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
                             //計算下一點定位位置
                             angleALL = degree[0]; //這個是因為要讓他重新算出使點，每走一部，就把他得到的compass初始化，不會讓yz一直累積（加上y,z之前的angleALL）
-                            MemberStep++;
-                            AllStep++;
+                            MemberStep++; //記錄步伐 會重置
+                            AllStep++;//總步伐
                             double X = start.getPosition().getLatitude() + StepLong * xx; //約75公分
                             double Y = start.getPosition().getLongitude() + StepLong * yy;
                             StepPath[0] = start.getPosition();
-
+                            CheckMove();
                             if (markerYes) {
                                 if (start!=null)
                                 {
                                     start.remove();
                                     start = mapboxMap1.addMarker(new MarkerOptions().position(new LatLng(X, Y)).title("You").icon(icon));
                                     Log.e("移動座標", String.valueOf(X)+"--"+String.valueOf(Y));
-                                    ss++;
+                                    ss++;;
                                     StartP = new LatLng(start.getPosition().getLatitude(), start.getPosition().getLongitude());
                                     Log.e("ss:", String.valueOf(ss));
+                                    Log.e("step:", String.valueOf(MemberStep));
                                 }
 
                             }
@@ -834,11 +1051,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                         }
                     }
                 }
-            }
-            if(ss>5)
-            {
-                NaviDo();
-                ss=0;
             }
         }
     }
@@ -862,25 +1074,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                             }
 
                         }).show();
-    }
-
-    public void NaviDo() {
-        //歸零避免累加
-        angley = 0;
-        anglez = 0;
-        angle[1] = 0;
-        angle[2] = 0;
-  //      EndP2 = new LatLng(blocation);
-        Actualdistance = GetDistance(StartP.getLatitude(), StartP.getLongitude(), EndP.getLatitude(), EndP.getLongitude());
-        foot = (Actualdistance / MemberStep);
-        stepdistance.setText("距離："+String.valueOf(Actualdistance)+"公尺");
-        stepcount.setText("步數："+String.valueOf(foot)+"步");
- //       StepLong = (Actualdistance / MemberStep) * 0.00000900900901;//因為是公尺所以*0.00000900900901代表一度
-        MemberStep = 0;
- //       txt_dis.setText(String.valueOf(Actualdistance));
- //       StartP = new LatLng(EndP2);
- //       start = mapboxMap1.addMarker(new MarkerOptions().position(new LatLng(blocation)));
-
     }
 
     //方位旋轉
@@ -913,7 +1106,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         zCoeff = accZ / 10;
      //   Log.e("角", angley + "," + anglez);
         angleyz = (angley * yCoeff) + (anglez * zCoeff);
-     //   Log.e("角度:", String.valueOf(angleyz));
+   //     Log.e("角度:", String.valueOf(angleyz));
 
     }
     //計算該緯度上的精度長度
@@ -957,9 +1150,10 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     //使用timer持續搜尋
     private Runnable updateTimer = new Runnable() {
         public void run() {
-            Log.e("Timer:", String.valueOf("TimerOK"));
+        //    Log.e("Timer:", String.valueOf("TimerOK"));
             if(navistart == true) {
                 CheckUserRoad();
+                bug();
             }
             handler.postDelayed(this, 1000);
         }
@@ -976,12 +1170,13 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             }
         }
         LOWD3 = 10000; //設10000只是故意設一個比較大的數字防止超過
-        if (start.getPosition().distanceTo(poly.getPoints().get(countCheck)) > 5|| ss==5) {
+        if (start.getPosition().distanceTo(poly.getPoints().get(countCheck)) > 5|| ss>3) {
             for (int i = 0; i < map.size(); i++) {
                 distance2 = start.getPosition().distanceTo(map.get(i));
                 if (distance2 <= LOWD2) {
                     OtherP = i;
                     LOWD2 = distance2;
+                    ss=0;
                 }
             //    Log.e("checkload:", String.valueOf(countCheck));
             }
@@ -990,7 +1185,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             if (ArrayC) {
                 result.clear();
             }
-            Log.e("checkload:", String.valueOf(OtherP));
+       //     Log.e("checkload:", String.valueOf(OtherP));
             findCheapestPath(OtherP, count2, w1);
             routePP = new LatLng[result.size()];
             for (int i = 0; i < result.size(); i++) {
@@ -1004,6 +1199,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                         .width(5));
                 routePcheck = OtherP;
             }
+            Actualdistance = GetDistance(StartP.getLatitude(), StartP.getLongitude(), EndP.getLatitude(), EndP.getLongitude());
+            stepdistance.setText("距離："+String.valueOf(Actualdistance)+"公尺");
         }
     }
     private void  pathclear()
@@ -1015,6 +1212,331 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         }
         catch (Exception exception){}
     }
+    public void CheckMove() {
+        if(startlocation=="M618") {
+            Log.e("trangle:", check);
+            if(check=="0") {
+                EndP2= new LatLng(CheckpointA);
+                trangle = GetDistance(StartP.getLatitude(), StartP.getLongitude(), EndP2.getLatitude(), EndP2.getLongitude());
+                Log.e("trangle:", String.valueOf(trangle));
+                RightorLeft();
+            }
+        }
+    }
+    public void bug()
+    {
+        if (bug == "1") {
 
+
+            IconFactory iconFactory = IconFactory.getInstance(MainActivity.this);
+            Icon icon = iconFactory.fromResource(R.drawable.ic_start_name);
+            start.remove();
+            start = mapboxMap1.addMarker(new MarkerOptions().position(new LatLng(blocation)).title("起點").icon(icon));
+        }
+        bug = "0" ;
+    }
+    public void RightorLeft()
+    {
+        if (trangle<=2)
+        {
+            imageView.setImageResource(imgId[2]);
+        }else{ imageView.setImageResource(imgId[0]);}
+    }
+    @Override //畫面改變？或是移動中改變。
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        com.banjo.ewilson.ardistance.common.helpers.FullScreenHelper.setFullScreenOnWindowFocusChanged(this, hasFocus);
+    }
+
+
+    //創造出平面
+    public void onSurfaceCreated(GL10 gl, EGLConfig config) {
+        GLES20.glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+
+        // Prepare the rendering objects. This involves reading shaders, so may throw an IOException.
+        try {
+            // Create the texture and pass it to ARCore session to be filled during update().
+            backgroundRenderer.createOnGlThread(/*context=*/ this);
+            planeRenderer.createOnGlThread(/*context=*/ this, "models/trigrid.png");
+            pointCloudRenderer.createOnGlThread(/*context=*/ this);
+
+            virtualObject.createOnGlThread(/*context=*/ this, "models/waypoint.obj", "models/waypoint_color2.png");
+            virtualObject.setMaterialProperties(0.0f, 2.0f, 0.5f, 6.0f);
+
+
+        } catch (IOException e) {
+        }
+    }
+
+    public void onSurfaceChanged(GL10 gl, int width, int height) {
+        displayRotationHelper.onSurfaceChanged(width, height);
+        GLES20.glViewport(0, 0, width, height);
+    }
+
+    public void onDrawFrame(GL10 gl) {
+        // Clear screen to notify driver it should not load any pixels from previous frame.
+        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT | GLES20.GL_DEPTH_BUFFER_BIT);
+
+        if (session == null) {
+            return;
+        }
+        // Notify ARCore session that the view size changed so that the perspective matrix and
+        // the video background can be properly adjusted.
+        // 通知ARCORE任務，當視野改變的時候，透視矩陣和畫面背景能夠被適合的調整校正。
+        displayRotationHelper.updateSessionIfNeeded(session);
+
+        try {
+            session.setCameraTextureName(backgroundRenderer.getTextureId());
+
+            // Obtain the current frame from ARSession. When the configuration is set to
+            // UpdateMode.BLOCKING (it is by default), this will throttle the rendering to the
+            // camera framerate.
+            // 從ARSESSION去獲得當前的幀數，當組態被設定到UPDATEMODE.BLOCKING時，會有類似匯流排功能去調整相機畫面
+            Frame frame = session.update();
+            Camera camera = frame.getCamera();
+
+            // Handle taps. Handling only one tap per frame, as taps are usually low frequency
+            // compared to frame rate.
+
+            MotionEvent tap = tapHelper.poll();
+            if (armovecheck== "1" && camera.getTrackingState() == TrackingState.TRACKING) {
+             //   Log.e("ARtest2:","ok" );
+                armovecheck = "0";
+              /*  for (HitResult hit : frame.hitTest(tap)) {
+                    // Check if any plane was hit, and if it was hit inside the plane polygon
+                    Trackable trackable = hit.getTrackable();
+                    // Creates an anchor if a plane or an oriented point was hit.
+                    if ((trackable instanceof Plane && ((Plane) trackable).isPoseInPolygon(hit.getHitPose()))
+                            || (trackable instanceof com.google.ar.core.Point
+                            && ((Point) trackable).getOrientationMode()
+                            == Point.OrientationMode.ESTIMATED_SURFACE_NORMAL)) {
+                        }*/
+                if (anchors.size() == 2) {
+                    anchors.clear();
+                }
+                        anchors.add(session.createAnchor(
+                                frame.getCamera().getPose()
+                                        .compose(Pose.makeTranslation(0, 0, -1f))
+                                        .extractTranslation()));
+
+                        Pose pose1 ;
+                        Pose pose2 ;
+                        pose1 = anchors.get(0).getPose();
+                        pose2 = anchors.get(1).getPose();
+                        Log.e("ARtestpose1:", String.valueOf(pose1));
+                        Log.e("ARtestpose2:", String.valueOf(pose2));
+                        double distanceMeters = getDistance(pose1, pose2);
+                        Log.e("ARdistance:", String.valueOf(distanceMeters));
+                        double distanceFeet = (double) (distanceMeters / 0.3048);
+                        StepLong = distanceMeters * 0.00000900900901 ;
+                        foot = (Actualdistance/ distanceMeters);
+                        stepdistance.setText("距離："+String.valueOf(Actualdistance)+"公尺");
+                        String footz = foots.format(foot);
+                        stepcount.setText("步數："+footz+"步");
+
+                double distanceInches = (double) (distanceFeet * 12);
+                        double ygedis = (distanceFeet * 30.5 + distanceInches * 2.5)/2 ; // 30.5 and 2.5 are 「cm」
+                        String result = "";
+                        if(distanceFeet < 1) {
+                            //result = format.format(distanceInches).toString() + ": in";
+                            result = String.valueOf((int)ygedis) + "cm" ;
+                            printResult(result);
+                        }
+                        if(distanceFeet >= 1){
+                            distanceInches = distanceInches % 12;
+                            // result = String.valueOf((int)distanceFeet) + " ft : " + format.format(distanceInches).toString() + " in";
+                            result = String.valueOf((int)ygedis);
+                            printResult(result);
+                            Log.e("AR:", String.valueOf(distanceMeters));
+                        }
+                     //   break;
+                  //  }
+                //}
+
+            }
+            //Log.v("PLLLLLL",updatedAugmentedImages.toString());
+
+            // Draw background.
+            backgroundRenderer.draw(frame);
+
+            // If not tracking, don't draw 3d objects.
+            if (camera.getTrackingState() == TrackingState.PAUSED) {
+                return;
+            }
+
+
+            // Get projection matrix.
+            float[] projmtx = new float[16];
+            camera.getProjectionMatrix(projmtx, 0, 0.1f, 100.0f);
+            // Get camera matrix and draw.
+            float[] viewmtx = new float[16];
+            camera.getViewMatrix(viewmtx, 0);
+
+            final float[] colorCorrectionRgba = new float[4];
+            frame.getLightEstimate().getColorCorrection(colorCorrectionRgba, 0);
+            drawAugmentedImages(frame, projmtx, viewmtx, colorCorrectionRgba);
+
+            // Visualize tracked points.
+            PointCloud pointCloud = frame.acquirePointCloud();
+            pointCloudRenderer.update(pointCloud);
+            pointCloudRenderer.draw(viewmtx, projmtx);
+
+            // Application is responsible for releasing the point cloud resources after
+            // using it.
+            pointCloud.release();
+
+            // Check if we detected at least one plane. If so, hide the loading message.
+            if (messageSnackbarHelper.isShowing()) {
+                for (Plane plane : session.getAllTrackables(Plane.class)) {
+                    if (plane.getType() == com.google.ar.core.Plane.Type.HORIZONTAL_UPWARD_FACING
+                            && plane.getTrackingState() == TrackingState.TRACKING) {
+                        messageSnackbarHelper.hide(this);
+                        break;
+                    }
+                }
+            }
+
+            // Visualize planes.
+            planeRenderer.drawPlanes(
+                    session.getAllTrackables(Plane.class), camera.getDisplayOrientedPose(), projmtx);
+
+            // Visualize anchors created by touch.
+            float scaleFactor = 1.0f;
+            for (Anchor anchor : anchors) {
+                if (anchor.getTrackingState() != TrackingState.TRACKING) {
+                    continue;
+                }
+                // Get the current pose of an Anchor in world space. The Anchor pose is updated
+                // during calls to session.update() as ARCore refines its estimate of the world.
+                anchor.getPose().toMatrix(anchorMatrix, 0);
+
+                // Update and draw the model and its shadow.
+                virtualObject.updateModelMatrix(anchorMatrix, scaleFactor);
+                virtualObject.draw(viewmtx, projmtx, colorCorrectionRgba);
+            }
+
+        } catch (Throwable t) {
+            // Avoid crashing the application due to unhandled exceptions.
+        }
+    }
+
+    //紀錄觸控點1,2的x,y,z座標，藉由計算出座標差，在轉換成現實中的距離。
+    private double getDistance(Pose pose0, Pose pose1){
+        float distanceX = pose0.tx() - pose1.tx();
+        float distanceY = pose0.ty() - pose1.ty();
+        float distanceZ = pose0.tz() - pose1.tz();
+        return Math.sqrt(distanceX * distanceX + distanceZ * distanceZ + distanceY * distanceY);
+    }
+
+    //輸出結果
+    private void printResult(final String result) {
+        runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                txt_movedis.setText(result);
+            }
+        });
+    }
+    private void drawAugmentedImages(
+            Frame frame, float[] projmtx, float[] viewmtx, float[] colorCorrectionRgba) {
+        Collection<AugmentedImage> updatedAugmentedImages =
+                frame.getUpdatedTrackables(AugmentedImage.class);
+        // Iterate to update augmentedImageMap, remove elements we cannot draw.
+        for (AugmentedImage augmentedImage : updatedAugmentedImages) {
+            switch (augmentedImage.getTrackingState()) {
+                case PAUSED:
+                    // When an image is in PAUSED state, but the camera is not PAUSED, it has been detected,
+                    // but not yet tracked.
+                    if(augmentedImage.getIndex() == 1) {
+                        Log.e("pausedR:", "pausedRok");
+                        bug = "1" ;
+                        blocation = new LatLng(24.98731645596, 121.54824469205);
+                        NaviDo();
+                        break;
+                    }
+                    if(augmentedImage.getIndex() == 0){
+                        Log.e("pausedS:", "pausedSok");
+                        bug = "1" ;
+                        blocation = new LatLng(24.98731645596, 121.54824469205);
+                        NaviDo();
+                        break;
+                    }
+                    String text = String.format("Detected Image %d", augmentedImage.getIndex());
+                    messageSnackbarHelper.showMessage(this, text);
+                    break;
+                case TRACKING:
+                    // Have to switch to UI Thread to update View.
+                    // Create a new anchor for newly found images.
+                    break;
+                case STOPPED:
+                    augmentedImageMap.remove(augmentedImage.getIndex());
+                    break;
+            }
+        }
+    }
+    public void NaviDo() {
+        //歸零避免累加
+        Log.e("Navi:", "naviok");
+        angley = 0;
+        anglez = 0;
+        angle[1] = 0;
+        angle[2] = 0;
+        MemberStep = 0;
+        EndP2 = new LatLng(blocation);
+        StartP = new LatLng(EndP2);
+        Actualdistance = GetDistance(StartP.getLatitude(), StartP.getLongitude(), EndP.getLatitude(), EndP.getLongitude());
+        stepdistance.setText("距離："+String.valueOf(Actualdistance)+"公尺");
+
+    }
+    private void configureSession() {
+        Config config = new Config(session);
+       // config.setFocusMode(Config.FocusMode.AUTO);
+        if (!setupAugmentedImageDatabase(config)) {
+            messageSnackbarHelper.showError(this, "Could not setup augmented image database");
+        }
+        session.configure(config);
+    }
+    
+    private boolean setupAugmentedImageDatabase(Config config) {
+        AugmentedImageDatabase augmentedImageDatabase;
+        // There are two ways to configure an AugmentedImageDatabase:
+        // 1. Add Bitmap to DB directly
+        // 2. Load a pre-built AugmentedImageDatabase
+        // Option 2) has
+        // * shorter setup time
+        // * doesn't require images to be packaged in apk.
+        if (useSingleImage) {
+            Bitmap augmentedImageBitmap = loadAugmentedImageBitmap();
+            if (augmentedImageBitmap == null) {
+                return false;
+            }
+            augmentedImageDatabase = new AugmentedImageDatabase(session);
+            augmentedImageDatabase.addImage("70.jpg", augmentedImageBitmap);
+            // If the physical size of the image is known, you can instead use:
+            //     augmentedImageDatabase.addImage("image_name", augmentedImageBitmap, widthInMeters);
+            // This will improve the initial detection speed. ARCore will still actively estimate the
+            // physical size of the image as it is viewed from multiple viewpoints.
+        } else {
+            // This is an alternative way to initialize an AugmentedImageDatabase instance,
+            // load a pre-existing augmented image database.
+            try (InputStream is = getAssets().open("floor.imgdb")) {
+                augmentedImageDatabase = AugmentedImageDatabase.deserialize(session, is);
+            } catch (IOException e) {
+                Log.e("database", "IO exception loading augmented image database.", e);
+                return false;
+            }
+        }
+        config.setAugmentedImageDatabase(augmentedImageDatabase);
+        return true;
+    }
+    private Bitmap loadAugmentedImageBitmap() {
+        try (InputStream is = getAssets().open("70.jpg")) {
+            return BitmapFactory.decodeStream(is);
+        } catch (IOException e) {
+            Log.e("ImageBit", "IO exception loading augmented image bitmap.", e);
+        }
+        return null;
+    }
 }
+
 

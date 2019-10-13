@@ -16,6 +16,10 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
+    compileOptions {
+        targetCompatibility = '1.8'
+        sourceCompatibility = '1.8'
+    }
 }
 
 dependencies {
@@ -49,4 +53,8 @@ dependencies {
     //加入這行, AndroidStudio 就會自動下載這個套件
     implementation 'com.google.zxing:core:3.0.1'
     implementation 'com.android.support:design:28.0.0'
+    implementation 'com.google.ar:core:1.9.0'
+    implementation 'com.google.ar.sceneform.ux:sceneform-ux:1.9.0'
+    implementation 'com.google.ar.sceneform:core:1.9.0'
+    implementation 'de.javagl:obj:0.2.1'
 }
