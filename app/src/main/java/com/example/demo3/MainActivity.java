@@ -1357,7 +1357,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                             == Point.OrientationMode.ESTIMATED_SURFACE_NORMAL)) {
                         }*/
                 if (anchors.size() == 2) {
-                    anchors.clear();
+                    anchors.remove(0);
                 }
                         anchors.add(session.createAnchor(
                                 frame.getCamera().getPose()
@@ -1370,6 +1370,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                         pose2 = anchors.get(1).getPose();
                         Log.e("ARtestpose1:", String.valueOf(pose1));
                         Log.e("ARtestpose2:", String.valueOf(pose2));
+                        pose1=pose2;
                         double distanceMeters = getDistance(pose1, pose2);
                         if(distanceMeters>0.9)
                         {
