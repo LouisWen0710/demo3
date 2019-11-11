@@ -1252,9 +1252,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     {
         if (bug == "1") {
 
-
             IconFactory iconFactory = IconFactory.getInstance(MainActivity.this);
-            Icon icon = iconFactory.fromResource(R.drawable.ic_start_name);
+            Icon icon = iconFactory.fromResource(R.drawable.navistart2);
             start.remove();
             start = mapboxMap1.addMarker(new MarkerOptions().position(new LatLng(blocation)).title("起點").icon(icon));
         }
@@ -1499,7 +1498,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                         Log.e("pausedS:", "pausedSok");
                         bug = "1" ;
                         check="1";
-                        blocation = new LatLng(24.98992479329, 121.54658377259);
+                        blocation = new LatLng(24.98992479329, 121.54635117529);
                         NaviDo();
                         break;
                     }
@@ -1561,7 +1560,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         } else {
             // This is an alternative way to initialize an AugmentedImageDatabase instance,
             // load a pre-existing augmented image database.
-            try (InputStream is = getAssets().open("floor.imgdb")) {
+            try (InputStream is = getAssets().open("img.imgdb")) {
                 augmentedImageDatabase = AugmentedImageDatabase.deserialize(session, is);
             } catch (IOException e) {
                 Log.e("database", "IO exception loading augmented image database.", e);
@@ -1573,7 +1572,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     }
     private Bitmap loadAugmentedImageBitmap() {
         try (
-                InputStream is = getAssets().open("70.jpg")) {
+                InputStream is = getAssets().open("trun_right.jpg")) {
                 return BitmapFactory.decodeStream(is);
         } catch (IOException e) {
                 Log.e("ImageBit", "IO exception loading augmented image bitmap.", e);
